@@ -1,0 +1,19 @@
+[phases.install]
+cmds = ["npm install"]
+
+[phases.build]
+cmds = ["npm run build"]
+
+[start]
+cmd = "npx serve -s build -l 3000"
+```
+
+Guarda con `Ctrl + S` y en la terminal:
+```
+git add .
+```
+```
+git commit -m "fix nixpacks"
+```
+```
+git push origin main
