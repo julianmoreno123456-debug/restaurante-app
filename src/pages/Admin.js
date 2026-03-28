@@ -16,7 +16,11 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
   const [nuevaOpcion, setNuevaOpcion] = useState('');
 
   const color = config?.colorPrincipal || '#e74c3c';
-
+  const handleCerrarSesion = async () => {
+    const { signOut } = await import('firebase/auth');
+    const { auth } = await import('../firebase');
+    await signOut(auth);
+  };
   const handleAgregarCategoria = () => {
     if (!nuevaCategoria) return;
     const cat = { id: Date.now() + Math.random().toString(36).substr(2, 9), nombre: nuevaCategoria, emoji: '🍽️' };
@@ -102,6 +106,12 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
 
         {/* LOGO Y NOMBRE */}
         <div style={{ textAlign: 'center', marginBottom: '20px', paddingBottom: '16px', borderBottom: '1px solid #eee' }}>
+          <button
+          onClick={handleCerrarSesion}
+          style={{ width: '100%', padding: '8px', background: '#fff', border: '1px solid #ddd', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', color: '#999', marginBottom: '16px' }}
+        >
+          Cerrar sesion
+        </button>
           {config?.logo && (
             <img src={config.logo} alt="logo" style={{ width: '60px', height: '60px', borderRadius: '50%', objectFit: 'cover', marginBottom: '8px' }} />
           )}

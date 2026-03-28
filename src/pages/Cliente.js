@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc } from 'firebase/firestore';
 
-function Cliente({ platos, categorias, config }) {
+function Cliente({ platos, categorias, config, uid }) {
   const [categoriaActiva, setCategoriaActiva] = useState(null);
   const [carrito, setCarrito] = useState([]);
   const [opcionesElegidas, setOpcionesElegidas] = useState({});
@@ -78,7 +78,7 @@ function Cliente({ platos, categorias, config }) {
     try {
       localStorage.setItem('datosPedido', JSON.stringify(datosPedido));
       const coords = await obtenerCoordenadas(datosPedido.direccion);
-      await addDoc(collection(db, 'pedidos'), {
+      await addDoc(collection(db, `restaurantes/${uid}/pedidos`), {
         nombre: datosPedido.nombre,
         telefono: datosPedido.telefono,
         direccion: datosPedido.direccion,
