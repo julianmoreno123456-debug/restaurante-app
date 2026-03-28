@@ -119,7 +119,7 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/restaurante/:uid" element={<ClienteWrapperRoute />} />
+        <Route path="/restaurante/:slug" element={<ClienteWrapperRoute />} />
         <Route path="/admin" element={<AdminWrapper />} />
         <Route path="/superadmin" element={<SuperAdmin />} />
         <Route path="/" element={<div style={{ textAlign: 'center', marginTop: '100px' }}><h1>Bienvenido</h1><p>Accede a tu restaurante con el enlace que te proporcionaron</p></div>} />
@@ -130,8 +130,24 @@ function App() {
 
 function ClienteWrapperRoute() {
   const { useParams } = require('react-router-dom');
-  const { uid } = useParams();
+  const [uid, setUid] = React.useState(null);
+  const { slug } = useParams();
+
+  React.useEffect(() => {
+    const buscarUid = async () => {
+      const { collection, query, where, getDocs } = await import('firebase/firestore');
+      const q = query(collection(db, 'restaurantes'), where('slug', '==', slug));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        setUid(snap.docs[0].data().uid);
+      } else {
+        setUid(slug);
+      }
+    };
+    buscarUid();
+  }, [slug]);
+
+  if (!uid) return <div style={{ textAlign: 'center', marginTop: '100px' }}>Cargando...</div>;
   return <ClienteWrapper uidRestaurante={uid} />;
 }
-
 export default App;

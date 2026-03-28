@@ -40,6 +40,16 @@ function SuperAdmin() {
     }
   };
 
+ const crearSlug = (nombre) => {
+    return nombre
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .trim();
+  };
+
   const handleCrearRestaurante = async () => {
     if (!nuevoRestaurante.nombre || !nuevoRestaurante.email || !nuevoRestaurante.password) {
       alert('Completa todos los campos');
@@ -48,10 +58,12 @@ function SuperAdmin() {
     setCargando(true);
     try {
       const cred = await createUserWithEmailAndPassword(auth, nuevoRestaurante.email, nuevoRestaurante.password);
+      const slug = crearSlug(nuevoRestaurante.nombre);
       await setDoc(doc(db, 'restaurantes', cred.user.uid), {
         nombre: nuevoRestaurante.nombre,
         email: nuevoRestaurante.email,
         uid: cred.user.uid,
+        slug: slug,
         fechaCreacion: new Date().toISOString(),
         activo: true,
       });
@@ -204,10 +216,10 @@ function SuperAdmin() {
             <div style={{ background: '#f9f9f9', borderRadius: '8px', padding: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <p style={{ fontSize: '11px', color: '#999', margin: '0 0 2px' }}>Enlace pagina cliente</p>
-                <p style={{ fontSize: '12px', color: '#8e44ad', margin: 0 }}>{window.location.origin}/restaurante/{r.uid}</p>
+                <p style={{ fontSize: '12px', color: '#8e44ad', margin: 0 }}>{window.location.origin}/restaurante/{r.slug || r.uid}</p>
               </div>
               <button
-                onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/restaurante/${r.uid}`); alert('Enlace copiado!'); }}
+                onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/restaurante/${r.slug || r.uid}`); alert('Enlace copiado!'); }}
                 style={{ padding: '6px 12px', background: '#8e44ad', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '12px' }}
               >
                 Copiar
