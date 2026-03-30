@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
 import { collection, addDoc } from 'firebase/firestore';
 
@@ -10,23 +9,48 @@ function Cliente({ platos = [], categorias = [], config = {}, uid, pedidosHabili
   const [extrasElegidos, setExtrasElegidos] = useState({});
   const [mostrarFormPedido, setMostrarFormPedido] = useState(false);
   const [carritoAbierto, setCarritoAbierto] = useState(false);
+  const [cargando, setCargando] = useState(true);
   const [datosPedido, setDatosPedido] = useState({
     nombre: '',
     telefono: '',
     direccion: '',
     tipoPedido: 'domicilio',
+    mesa: '',
   });
+  const [pedidoEnviado, setPedidoEnviado] = useState(false);
 
-  const navigate = useNavigate();
   const color = config?.colorPrincipal || '#e74c3c';
+
+  useEffect(() => {
+    const timer = setTimeout(() => setCargando(false), 2000);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     const datosGuardados = localStorage.getItem('datosPedido');
     if (datosGuardados) {
       const datos = JSON.parse(datosGuardados);
-      setDatosPedido({ ...datos, tipoPedido: 'domicilio' });
+      setDatosPedido({ ...datos, tipoPedido: 'domicilio', mesa: '' });
     }
   }, []);
+
+  if (cargando) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: color }}>
+        {config?.logo ? (
+          <img src={config.logo} alt="logo" style={{ width: '110px', height: '110px', borderRadius: '50%', objectFit: 'cover', border: '4px solid white', marginBottom: '20px' }} />
+        ) : (
+          <div style={{ fontSize: '60px', marginBottom: '20px' }}>🍽️</div>
+        )}
+        <p style={{ color: 'white', fontSize: '20px', fontWeight: '500', margin: '0 0 6px' }}>{config?.nombre || 'Cargando...'}</p>
+        <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px', margin: '0 0 24px' }}>{config?.descripcion || ''}</p>
+        <div style={{ width: '48px', height: '4px', background: 'rgba(255,255,255,0.3)', borderRadius: '2px', overflow: 'hidden' }}>
+          <div style={{ width: '40%', height: '100%', background: 'white', borderRadius: '2px', animation: 'slide 1s ease-in-out infinite' }} />
+        </div>
+        <style>{`@keyframes slide { 0%{transform:translateX(-100%)} 100%{transform:translateX(350%)} }`}</style>
+      </div>
+    );
+  }
 
   const toggleOpcion = (platoId, opcion) => {
     const actuales = opcionesElegidas[platoId] || [];
@@ -86,25 +110,26 @@ function Cliente({ platos = [], categorias = [], config = {}, uid, pedidosHabili
       alert('Por favor completa nombre y telefono');
       return;
     }
-    if (datosPedido.tipoPedido !== 'sitio' && !datosPedido.direccion) {
+    if (datosPedido.tipoPedido === 'domicilio' && !datosPedido.direccion) {
       alert('Por favor ingresa la direccion de entrega');
       return;
     }
-    if (!uid) {
-      alert('Error: no se pudo identificar el restaurante');
+    if (datosPedido.tipoPedido === 'mesa' && !datosPedido.mesa) {
+      alert('Por favor selecciona tu mesa');
       return;
     }
     try {
       localStorage.setItem('datosPedido', JSON.stringify(datosPedido));
-      const coords = datosPedido.tipoPedido !== 'sitio'
+      const coords = datosPedido.tipoPedido === 'domicilio'
         ? await obtenerCoordenadas(datosPedido.direccion)
         : null;
       const numeroPedido = Math.floor(Math.random() * 9000 + 1000);
-      const docRef = await addDoc(collection(db, `restaurantes/${uid}/pedidos`), {
+      await addDoc(collection(db, `restaurantes/${uid}/pedidos`), {
         nombre: datosPedido.nombre,
         telefono: datosPedido.telefono,
-        direccion: datosPedido.tipoPedido === 'sitio' ? 'En el sitio' : datosPedido.direccion,
-        tipoPedido: datosPedido.tipoPedido || 'domicilio',
+        direccion: datosPedido.tipoPedido === 'domicilio' ? datosPedido.direccion : datosPedido.tipoPedido === 'mesa' ? `Mesa ${datosPedido.mesa}` : 'En el sitio',
+        tipoPedido: datosPedido.tipoPedido,
+        mesa: datosPedido.mesa || null,
         lat: coords ? coords.lat : null,
         lng: coords ? coords.lng : null,
         items: carrito.map((p) => ({
@@ -121,13 +146,14 @@ function Cliente({ platos = [], categorias = [], config = {}, uid, pedidosHabili
       setCarrito([]);
       setMostrarFormPedido(false);
       setCarritoAbierto(false);
-      const url = `/seguimiento/${uid}/${docRef.id}`;
-      console.log('Navegando a:', url);
-      window.location.href = url;
+      setPedidoEnviado(true);
+      setTimeout(() => setPedidoEnviado(false), 5000);
     } catch (error) {
       alert('Error al enviar el pedido: ' + error.message);
     }
   };
+
+  const mesas = Array.from({ length: 20 }, (_, i) => i + 1);
 
   return (
     <div style={{ minHeight: '100vh', background: '#f5f5f5' }}>
@@ -221,6 +247,12 @@ function Cliente({ platos = [], categorias = [], config = {}, uid, pedidosHabili
         {/* PLATOS */}
         <div style={{ flex: 1, padding: '24px' }}>
 
+          {pedidoEnviado && (
+            <div style={{ background: '#2ecc71', color: 'white', padding: '14px', borderRadius: '10px', marginBottom: '20px', textAlign: 'center', fontSize: '15px' }}>
+              Pedido enviado con exito
+            </div>
+          )}
+
           {!pedidosHabilitados && (
             <div style={{ background: '#fff3cd', border: '1px solid #ffc107', borderRadius: '10px', padding: '14px', marginBottom: '20px', textAlign: 'center', fontSize: '14px', color: '#856404' }}>
               Los pedidos en linea estan temporalmente deshabilitados
@@ -293,18 +325,25 @@ function Cliente({ platos = [], categorias = [], config = {}, uid, pedidosHabili
           <div style={{ background: 'white', borderRadius: '14px', padding: '24px', width: '320px', maxHeight: '90vh', overflowY: 'auto' }}>
             <h3 style={{ marginBottom: '16px' }}>Datos del pedido</h3>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '16px' }}>
+            {/* TIPO DE PEDIDO */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '16px' }}>
               <button
                 onClick={() => setDatosPedido({ ...datosPedido, tipoPedido: 'domicilio' })}
-                style={{ padding: '10px', borderRadius: '8px', border: datosPedido.tipoPedido !== 'sitio' ? `2px solid ${color}` : '1px solid #ddd', background: datosPedido.tipoPedido !== 'sitio' ? color + '15' : 'white', cursor: 'pointer', fontSize: '13px', fontWeight: '500' }}
+                style={{ padding: '10px 6px', borderRadius: '8px', border: datosPedido.tipoPedido === 'domicilio' ? `2px solid ${color}` : '1px solid #ddd', background: datosPedido.tipoPedido === 'domicilio' ? color + '15' : 'white', cursor: 'pointer', fontSize: '12px', fontWeight: '500' }}
               >
-                Domicilio
+                🛵 Domicilio
               </button>
               <button
                 onClick={() => setDatosPedido({ ...datosPedido, tipoPedido: 'sitio' })}
-                style={{ padding: '10px', borderRadius: '8px', border: datosPedido.tipoPedido === 'sitio' ? `2px solid ${color}` : '1px solid #ddd', background: datosPedido.tipoPedido === 'sitio' ? color + '15' : 'white', cursor: 'pointer', fontSize: '13px', fontWeight: '500' }}
+                style={{ padding: '10px 6px', borderRadius: '8px', border: datosPedido.tipoPedido === 'sitio' ? `2px solid ${color}` : '1px solid #ddd', background: datosPedido.tipoPedido === 'sitio' ? color + '15' : 'white', cursor: 'pointer', fontSize: '12px', fontWeight: '500' }}
               >
-                Comer aqui
+                🪑 Comer aqui
+              </button>
+              <button
+                onClick={() => setDatosPedido({ ...datosPedido, tipoPedido: 'mesa' })}
+                style={{ padding: '10px 6px', borderRadius: '8px', border: datosPedido.tipoPedido === 'mesa' ? `2px solid ${color}` : '1px solid #ddd', background: datosPedido.tipoPedido === 'mesa' ? color + '15' : 'white', cursor: 'pointer', fontSize: '12px', fontWeight: '500' }}
+              >
+                🍽️ Mesa
               </button>
             </div>
 
@@ -321,13 +360,26 @@ function Cliente({ platos = [], categorias = [], config = {}, uid, pedidosHabili
               style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px', marginBottom: '10px' }}
             />
 
-            {datosPedido.tipoPedido !== 'sitio' && (
+            {datosPedido.tipoPedido === 'domicilio' && (
               <input
                 placeholder="Direccion de entrega"
                 value={datosPedido.direccion}
                 onChange={(e) => setDatosPedido({ ...datosPedido, direccion: e.target.value })}
                 style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px', marginBottom: '10px' }}
               />
+            )}
+
+            {datosPedido.tipoPedido === 'mesa' && (
+              <select
+                value={datosPedido.mesa}
+                onChange={(e) => setDatosPedido({ ...datosPedido, mesa: e.target.value })}
+                style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px', marginBottom: '10px' }}
+              >
+                <option value="">Selecciona tu mesa</option>
+                {mesas.map((m) => (
+                  <option key={m} value={m}>Mesa {m}</option>
+                ))}
+              </select>
             )}
 
             <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>

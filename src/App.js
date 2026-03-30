@@ -7,6 +7,7 @@ import Cliente from './pages/Cliente';
 import Admin from './pages/Admin';
 import Login from './pages/Login';
 import SuperAdmin from './pages/SuperAdmin';
+import Seguimiento from './pages/Seguimiento';
 import './App.css';
 
 const configInicial = {
@@ -16,6 +17,41 @@ const configInicial = {
   banner: null,
   logo: null,
 };
+
+function PantallaCarga({ config }) {
+  const color = config?.colorPrincipal || '#e74c3c';
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: color }}>
+      {config?.logo ? (
+        <img src={config.logo} alt="logo" style={{ width: '100px', height: '100px', borderRadius: '50%', objectFit: 'cover', border: '3px solid white', marginBottom: '20px' }} />
+      ) : (
+        <div style={{ fontSize: '50px', marginBottom: '20px' }}>🍽️</div>
+      )}
+      <p style={{ color: 'white', fontSize: '18px', fontWeight: '500', margin: '0 0 8px' }}>{config?.nombre || 'Cargando...'}</p>
+      <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px', margin: 0 }}>Por favor espera...</p>
+      <div style={{ marginTop: '24px', width: '40px', height: '4px', background: 'rgba(255,255,255,0.3)', borderRadius: '2px', overflow: 'hidden' }}>
+        <div style={{ width: '40%', height: '100%', background: 'white', borderRadius: '2px', animation: 'slide 1s infinite' }} />
+      </div>
+      <style>{`@keyframes slide { 0% { transform: translateX(-100%) } 100% { transform: translateX(350%) } }`}</style>
+    </div>
+  );
+}
+
+function PaginaNoDisponible({ razon }) {
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#f5f5f5', padding: '20px', textAlign: 'center' }}>
+      <p style={{ fontSize: '60px', margin: '0 0 16px' }}>{razon === 'suspendido' ? '🔒' : '❌'}</p>
+      <h2 style={{ fontSize: '20px', margin: '0 0 8px' }}>
+        {razon === 'suspendido' ? 'Pagina temporalmente suspendida' : 'Esta pagina no existe'}
+      </h2>
+      <p style={{ color: '#999', fontSize: '14px', margin: 0 }}>
+        {razon === 'suspendido'
+          ? 'Por favor contacta al restaurante para mas informacion'
+          : 'El enlace que usaste no es valido o fue eliminado'}
+      </p>
+    </div>
+  );
+}
 
 function AdminWrapper() {
   const [usuario, setUsuario] = useState(null);
@@ -70,7 +106,7 @@ function AdminWrapper() {
     setConfig(nuevaConfig);
   };
 
-  if (cargando) return <div style={{ textAlign: 'center', marginTop: '100px' }}>Cargando...</div>;
+  if (cargando) return <PantallaCarga config={configInicial} />;
   if (!usuario) return <Login />;
 
   return (
@@ -102,6 +138,7 @@ function ClienteWrapperRoute() {
       try {
         const q = query(collection(db, 'restaurantes'), where('slug', '==', slug));
         const snap = await getDocs(q);
+
         if (snap.empty) {
           const directSnap = await getDocs(query(collection(db, 'restaurantes'), where('uid', '==', slug)));
           if (directSnap.empty) {
@@ -147,23 +184,9 @@ function ClienteWrapperRoute() {
     return () => { unsubConfig(); unsubCat(); unsubPlat(); unsubInfo(); };
   }, [uid]);
 
-  if (estado === 'cargando') return <div style={{ textAlign: 'center', marginTop: '100px' }}>Cargando...</div>;
-
-  if (estado === 'noexiste') return (
-    <div style={{ textAlign: 'center', marginTop: '100px', padding: '20px' }}>
-      <p style={{ fontSize: '50px' }}>❌</p>
-      <h2>Esta pagina no existe</h2>
-      <p style={{ color: '#999' }}>El enlace no es valido o fue eliminado</p>
-    </div>
-  );
-
-  if (estado === 'suspendido') return (
-    <div style={{ textAlign: 'center', marginTop: '100px', padding: '20px' }}>
-      <p style={{ fontSize: '50px' }}>🔒</p>
-      <h2>Pagina temporalmente suspendida</h2>
-      <p style={{ color: '#999' }}>Contacta al restaurante para mas informacion</p>
-    </div>
-  );
+  if (estado === 'cargando') return <PantallaCarga config={config} />;
+  if (estado === 'noexiste') return <PaginaNoDisponible razon="noexiste" />;
+  if (estado === 'suspendido') return <PaginaNoDisponible razon="suspendido" />;
 
   return (
     <Cliente
@@ -176,20 +199,47 @@ function ClienteWrapperRoute() {
   );
 }
 
+function SeguimientoRoute() {
+  const { uid, pedidoId } = useParams();
+  const [config, setConfig] = useState(configInicial);
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => {
+    if (!uid || !pedidoId) {
+      setCargando(false);
+      return;
+    }
+    const unsub = onSnapshot(collection(db, `restaurantes/${uid}/config`), (snap) => {
+      if (!snap.empty) setConfig({ id: snap.docs[0].id, ...snap.docs[0].data() });
+      setCargando(false);
+    });
+    return () => unsub();
+  }, [uid, pedidoId]);
+
+  if (!uid || !pedidoId) return (
+    <div style={{ textAlign: 'center', marginTop: '100px' }}>
+      <p style={{ color: '#aaa' }}>Ruta no valida</p>
+    </div>
+  );
+
+  if (cargando) return <PantallaCarga config={config} />;
+  return <Seguimiento pedidoId={pedidoId} uid={uid} config={config} />;
+}
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={
+         <Route path="/" element={
           <div style={{ textAlign: 'center', marginTop: '100px' }}>
             <h1>Bienvenido a Lovecraft</h1>
-            <p>Accede a tu restaurante con el enlace que te proporcionaron</p>
+             <p>Accede a tu restaurante con el enlace que te proporcionaron</p>
           </div>
         } />
-        <Route path="/superadmin" element={<SuperAdmin />} />
+        <Route path="/lovecraft-master-panel" element={<SuperAdmin />} />
         <Route path="/admin" element={<AdminWrapper />} />
         <Route path="/restaurante/:slug" element={<ClienteWrapperRoute />} />
-      </Routes>
+  
+</Routes>
     </BrowserRouter>
   );
 }
