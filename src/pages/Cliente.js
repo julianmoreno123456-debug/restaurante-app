@@ -1,23 +1,30 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
 import { collection, addDoc } from 'firebase/firestore';
 
-function Cliente({ platos, categorias, config, uid }) {
+function Cliente({ platos = [], categorias = [], config = {}, uid, pedidosHabilitados = true }) {
   const [categoriaActiva, setCategoriaActiva] = useState(null);
   const [carrito, setCarrito] = useState([]);
   const [opcionesElegidas, setOpcionesElegidas] = useState({});
   const [extrasElegidos, setExtrasElegidos] = useState({});
   const [mostrarFormPedido, setMostrarFormPedido] = useState(false);
   const [carritoAbierto, setCarritoAbierto] = useState(false);
-  const [datosPedido, setDatosPedido] = useState({ nombre: '', telefono: '', direccion: '' });
-  const [pedidoEnviado, setPedidoEnviado] = useState(false);
+  const [datosPedido, setDatosPedido] = useState({
+    nombre: '',
+    telefono: '',
+    direccion: '',
+    tipoPedido: 'domicilio',
+  });
 
+  const navigate = useNavigate();
   const color = config?.colorPrincipal || '#e74c3c';
 
   useEffect(() => {
     const datosGuardados = localStorage.getItem('datosPedido');
     if (datosGuardados) {
-      setDatosPedido(JSON.parse(datosGuardados));
+      const datos = JSON.parse(datosGuardados);
+      setDatosPedido({ ...datos, tipoPedido: 'domicilio' });
     }
   }, []);
 
@@ -52,15 +59,19 @@ function Cliente({ platos, categorias, config, uid }) {
 
   const total = carrito.reduce((sum, p) => sum + p.precioFinal, 0);
 
+  const categoriasFiltradas = categorias.filter((c) => c.activa !== false);
   const platosFiltrados = categoriaActiva
     ? platos.filter((p) => p.categoriaId === categoriaActiva)
-    : platos;
+    : platos.filter((p) => {
+        const cat = categorias.find((c) => c.id === p.categoriaId);
+        return cat && cat.activa !== false;
+      });
 
   const obtenerCoordenadas = async (direccion) => {
     try {
       const resp = await fetch(
         'https://nominatim.openstreetmap.org/search?format=json&q=' +
-        encodeURIComponent(direccion + ', Bogota, Colombia')
+        encodeURIComponent(direccion + ', Colombia')
       );
       const data = await resp.json();
       if (data && data.length > 0) {
@@ -71,17 +82,29 @@ function Cliente({ platos, categorias, config, uid }) {
   };
 
   const handleEnviarPedido = async () => {
-    if (!datosPedido.nombre || !datosPedido.telefono || !datosPedido.direccion) {
-      alert('Por favor completa todos los campos');
+    if (!datosPedido.nombre || !datosPedido.telefono) {
+      alert('Por favor completa nombre y telefono');
+      return;
+    }
+    if (datosPedido.tipoPedido !== 'sitio' && !datosPedido.direccion) {
+      alert('Por favor ingresa la direccion de entrega');
+      return;
+    }
+    if (!uid) {
+      alert('Error: no se pudo identificar el restaurante');
       return;
     }
     try {
       localStorage.setItem('datosPedido', JSON.stringify(datosPedido));
-      const coords = await obtenerCoordenadas(datosPedido.direccion);
-      await addDoc(collection(db, `restaurantes/${uid}/pedidos`), {
+      const coords = datosPedido.tipoPedido !== 'sitio'
+        ? await obtenerCoordenadas(datosPedido.direccion)
+        : null;
+      const numeroPedido = Math.floor(Math.random() * 9000 + 1000);
+      const docRef = await addDoc(collection(db, `restaurantes/${uid}/pedidos`), {
         nombre: datosPedido.nombre,
         telefono: datosPedido.telefono,
-        direccion: datosPedido.direccion,
+        direccion: datosPedido.tipoPedido === 'sitio' ? 'En el sitio' : datosPedido.direccion,
+        tipoPedido: datosPedido.tipoPedido || 'domicilio',
         lat: coords ? coords.lat : null,
         lng: coords ? coords.lng : null,
         items: carrito.map((p) => ({
@@ -91,14 +114,16 @@ function Cliente({ platos, categorias, config, uid }) {
           opciones: p.opcionesElegidas || [],
         })),
         total,
+        numeroPedido,
         fecha: new Date().toISOString(),
         estado: 'pendiente',
       });
       setCarrito([]);
       setMostrarFormPedido(false);
       setCarritoAbierto(false);
-      setPedidoEnviado(true);
-      setTimeout(() => setPedidoEnviado(false), 4000);
+      const url = `/seguimiento/${uid}/${docRef.id}`;
+      console.log('Navegando a:', url);
+      window.location.href = url;
     } catch (error) {
       alert('Error al enviar el pedido: ' + error.message);
     }
@@ -182,7 +207,7 @@ function Cliente({ platos, categorias, config, uid }) {
           >
             Todos
           </div>
-          {categorias.map((cat) => (
+          {categoriasFiltradas.map((cat) => (
             <div
               key={cat.id}
               onClick={() => setCategoriaActiva(cat.id)}
@@ -196,9 +221,9 @@ function Cliente({ platos, categorias, config, uid }) {
         {/* PLATOS */}
         <div style={{ flex: 1, padding: '24px' }}>
 
-          {pedidoEnviado && (
-            <div style={{ background: '#2ecc71', color: 'white', padding: '14px', borderRadius: '10px', marginBottom: '20px', textAlign: 'center', fontSize: '15px' }}>
-              Pedido enviado con exito
+          {!pedidosHabilitados && (
+            <div style={{ background: '#fff3cd', border: '1px solid #ffc107', borderRadius: '10px', padding: '14px', marginBottom: '20px', textAlign: 'center', fontSize: '14px', color: '#856404' }}>
+              Los pedidos en linea estan temporalmente deshabilitados
             </div>
           )}
 
@@ -250,10 +275,10 @@ function Cliente({ platos, categorias, config, uid }) {
                   )}
 
                   <button
-                    onClick={() => agregarAlCarrito(plato)}
-                    style={{ width: '100%', padding: '8px', background: color, color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', fontSize: '13px' }}
+                    onClick={() => pedidosHabilitados && agregarAlCarrito(plato)}
+                    style={{ width: '100%', padding: '8px', background: pedidosHabilitados ? color : '#ccc', color: 'white', border: 'none', borderRadius: '10px', cursor: pedidosHabilitados ? 'pointer' : 'not-allowed', fontSize: '13px' }}
                   >
-                    Agregar
+                    {pedidosHabilitados ? 'Agregar' : 'No disponible'}
                   </button>
                 </div>
               </div>
@@ -265,8 +290,24 @@ function Cliente({ platos, categorias, config, uid }) {
       {/* FORMULARIO PEDIDO */}
       {mostrarFormPedido && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300 }}>
-          <div style={{ background: 'white', borderRadius: '14px', padding: '24px', width: '320px' }}>
-            <h3 style={{ marginBottom: '16px' }}>Datos de entrega</h3>
+          <div style={{ background: 'white', borderRadius: '14px', padding: '24px', width: '320px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h3 style={{ marginBottom: '16px' }}>Datos del pedido</h3>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '16px' }}>
+              <button
+                onClick={() => setDatosPedido({ ...datosPedido, tipoPedido: 'domicilio' })}
+                style={{ padding: '10px', borderRadius: '8px', border: datosPedido.tipoPedido !== 'sitio' ? `2px solid ${color}` : '1px solid #ddd', background: datosPedido.tipoPedido !== 'sitio' ? color + '15' : 'white', cursor: 'pointer', fontSize: '13px', fontWeight: '500' }}
+              >
+                Domicilio
+              </button>
+              <button
+                onClick={() => setDatosPedido({ ...datosPedido, tipoPedido: 'sitio' })}
+                style={{ padding: '10px', borderRadius: '8px', border: datosPedido.tipoPedido === 'sitio' ? `2px solid ${color}` : '1px solid #ddd', background: datosPedido.tipoPedido === 'sitio' ? color + '15' : 'white', cursor: 'pointer', fontSize: '13px', fontWeight: '500' }}
+              >
+                Comer aqui
+              </button>
+            </div>
+
             <input
               placeholder="Tu nombre"
               value={datosPedido.nombre}
@@ -279,17 +320,27 @@ function Cliente({ platos, categorias, config, uid }) {
               onChange={(e) => setDatosPedido({ ...datosPedido, telefono: e.target.value })}
               style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px', marginBottom: '10px' }}
             />
-            <input
-              placeholder="Direccion de entrega"
-              value={datosPedido.direccion}
-              onChange={(e) => setDatosPedido({ ...datosPedido, direccion: e.target.value })}
-              style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px', marginBottom: '16px' }}
-            />
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button onClick={handleEnviarPedido} style={{ flex: 1, padding: '12px', background: color, color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', fontSize: '14px' }}>
+
+            {datosPedido.tipoPedido !== 'sitio' && (
+              <input
+                placeholder="Direccion de entrega"
+                value={datosPedido.direccion}
+                onChange={(e) => setDatosPedido({ ...datosPedido, direccion: e.target.value })}
+                style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px', marginBottom: '10px' }}
+              />
+            )}
+
+            <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>
+              <button
+                onClick={handleEnviarPedido}
+                style={{ flex: 1, padding: '12px', background: color, color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', fontSize: '14px' }}
+              >
                 Confirmar pedido
               </button>
-              <button onClick={() => setMostrarFormPedido(false)} style={{ flex: 1, padding: '12px', background: '#eee', border: 'none', borderRadius: '10px', cursor: 'pointer', fontSize: '14px' }}>
+              <button
+                onClick={() => setMostrarFormPedido(false)}
+                style={{ flex: 1, padding: '12px', background: '#eee', border: 'none', borderRadius: '10px', cursor: 'pointer', fontSize: '14px' }}
+              >
                 Cancelar
               </button>
             </div>

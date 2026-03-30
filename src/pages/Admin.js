@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
 import { doc, updateDoc } from 'firebase/firestore';
+import { signOut } from 'firebase/auth';
 import Configuracion from './Configuracion';
 import Estadisticas from './Estadisticas';
 
@@ -16,14 +17,14 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
   const [nuevaOpcion, setNuevaOpcion] = useState('');
 
   const color = config?.colorPrincipal || '#e74c3c';
+
   const handleCerrarSesion = async () => {
-    const { signOut } = await import('firebase/auth');
-    const { auth } = await import('../firebase');
     await signOut(auth);
   };
+
   const handleAgregarCategoria = () => {
     if (!nuevaCategoria) return;
-    const cat = { id: Date.now() + Math.random().toString(36).substr(2, 9), nombre: nuevaCategoria, emoji: '🍽️' };
+    const cat = { id: Date.now() + Math.random().toString(36).substr(2, 9), nombre: nuevaCategoria, emoji: '🍽️', activa: true };
     guardarCategoria(cat);
     setNuevaCategoria('');
     setMostrarFormCategoria(false);
@@ -33,6 +34,11 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
     eliminarCategoria(id);
     platos.filter((p) => p.categoriaId === id).forEach((p) => eliminarPlato(p.id));
     setCategoriaActiva(null);
+  };
+
+  const handleToggleCategoria = (cat) => {
+    const actualizada = { ...cat, activa: cat.activa === false ? true : false };
+    guardarCategoria(actualizada);
   };
 
   const handleImagen = (e) => {
@@ -101,80 +107,49 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#f5f5f5' }}>
 
-      {/* SIDEBAR */}
       <div style={{ width: '220px', background: 'white', padding: '20px', borderRight: '1px solid #eee', flexShrink: 0 }}>
 
-        {/* LOGO Y NOMBRE */}
-        <div style={{ textAlign: 'center', marginBottom: '20px', paddingBottom: '16px', borderBottom: '1px solid #eee' }}>
-          <button
-          onClick={handleCerrarSesion}
-          style={{ width: '100%', padding: '8px', background: '#fff', border: '1px solid #ddd', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', color: '#999', marginBottom: '16px' }}
-        >
-          Cerrar sesion
-        </button>
-          {config?.logo && (
-            <img src={config.logo} alt="logo" style={{ width: '60px', height: '60px', borderRadius: '50%', objectFit: 'cover', marginBottom: '8px' }} />
-          )}
+        <div style={{ textAlign: 'center', marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid #eee' }}>
+          {config?.logo && <img src={config.logo} alt="logo" style={{ width: '60px', height: '60px', borderRadius: '50%', objectFit: 'cover', marginBottom: '8px' }} />}
           <p style={{ fontWeight: '500', fontSize: '14px', margin: 0 }}>{config?.nombre || 'Mi Restaurante'}</p>
         </div>
 
-        {/* NAVEGACION */}
+        <button onClick={handleCerrarSesion} style={{ width: '100%', padding: '8px', background: '#fff', border: '1px solid #ddd', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', color: '#999', marginBottom: '16px' }}>
+          Cerrar sesion
+        </button>
+
         <div style={{ marginBottom: '20px' }}>
-          <button
-            onClick={() => setVista('menu')}
-            style={{ width: '100%', padding: '10px', marginBottom: '6px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '14px', background: vista === 'menu' ? color : '#f5f5f5', color: vista === 'menu' ? 'white' : '#333' }}
-          >
-            Menu
-          </button>
-          <button
-            onClick={() => setVista('pedidos')}
-            style={{ width: '100%', padding: '10px', marginBottom: '6px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '14px', background: vista === 'pedidos' ? color : '#f5f5f5', color: vista === 'pedidos' ? 'white' : '#333' }}
-          >
+          <button onClick={() => setVista('menu')} style={{ width: '100%', padding: '10px', marginBottom: '6px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '14px', background: vista === 'menu' ? color : '#f5f5f5', color: vista === 'menu' ? 'white' : '#333' }}>Menu</button>
+          <button onClick={() => setVista('pedidos')} style={{ width: '100%', padding: '10px', marginBottom: '6px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '14px', background: vista === 'pedidos' ? color : '#f5f5f5', color: vista === 'pedidos' ? 'white' : '#333' }}>
             Pedidos {pedidos.filter(p => p.estado === 'pendiente').length > 0 && (
               <span style={{ background: '#2ecc71', color: 'white', borderRadius: '50%', padding: '2px 7px', fontSize: '11px', marginLeft: '6px' }}>
                 {pedidos.filter(p => p.estado === 'pendiente').length}
               </span>
             )}
           </button>
-          <button
-            onClick={() => setVista('configuracion')}
-            style={{ width: '100%', padding: '10px', marginBottom: '6px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '14px', background: vista === 'configuracion' ? color : '#f5f5f5', color: vista === 'configuracion' ? 'white' : '#333' }}
-          >
-            Configuracion
-          </button>
-          <button
-            onClick={() => setVista('estadisticas')}
-            style={{ width: '100%', padding: '10px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '14px', background: vista === 'estadisticas' ? color : '#f5f5f5', color: vista === 'estadisticas' ? 'white' : '#333' }}
-          >
-            Estadisticas
-          </button>
+          <button onClick={() => setVista('configuracion')} style={{ width: '100%', padding: '10px', marginBottom: '6px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '14px', background: vista === 'configuracion' ? color : '#f5f5f5', color: vista === 'configuracion' ? 'white' : '#333' }}>Configuracion</button>
+          <button onClick={() => setVista('estadisticas')} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '14px', background: vista === 'estadisticas' ? color : '#f5f5f5', color: vista === 'estadisticas' ? 'white' : '#333' }}>Estadisticas</button>
         </div>
 
         <h2 style={{ fontSize: '14px', marginBottom: '12px', color: '#999' }}>CATEGORIAS</h2>
 
         {categorias.map((cat) => (
-          <div key={cat.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px', borderRadius: '8px', marginBottom: '6px', cursor: 'pointer', background: categoriaActiva === cat.id && vista === 'menu' ? color : 'transparent', color: categoriaActiva === cat.id && vista === 'menu' ? 'white' : '#333' }}>
-            <span onClick={() => { setCategoriaActiva(cat.id); setVista('menu'); }} style={{ flex: 1, fontSize: '14px' }}>
+          <div key={cat.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px', borderRadius: '8px', marginBottom: '6px', cursor: 'pointer', background: categoriaActiva === cat.id && vista === 'menu' ? color : 'transparent', color: categoriaActiva === cat.id && vista === 'menu' ? 'white' : '#333' }}>
+            <span onClick={() => { setCategoriaActiva(cat.id); setVista('menu'); }} style={{ flex: 1, fontSize: '13px', opacity: cat.activa === false ? 0.4 : 1 }}>
               {cat.emoji} {cat.nombre}
             </span>
-            <button onClick={() => handleEliminarCategoria(cat.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', color: categoriaActiva === cat.id && vista === 'menu' ? 'white' : '#aaa' }}>🗑️</button>
+            <button onClick={() => handleToggleCategoria(cat)} title={cat.activa === false ? 'Activar' : 'Desactivar'} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px' }}>
+              {cat.activa === false ? '👁️' : '🙈'}
+            </button>
+            <button onClick={() => handleEliminarCategoria(cat.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px' }}>🗑️</button>
           </div>
         ))}
 
         {mostrarFormCategoria ? (
           <div style={{ marginTop: '10px' }}>
-            <input
-              placeholder="Nombre categoria"
-              value={nuevaCategoria}
-              onChange={(e) => setNuevaCategoria(e.target.value)}
-              style={{ width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '13px', marginBottom: '8px' }}
-            />
-            <button onClick={handleAgregarCategoria} style={{ width: '100%', padding: '8px', background: color, color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', marginBottom: '6px' }}>
-              Guardar
-            </button>
-            <button onClick={() => setMostrarFormCategoria(false)} style={{ width: '100%', padding: '8px', background: '#eee', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
-              Cancelar
-            </button>
+            <input placeholder="Nombre categoria" value={nuevaCategoria} onChange={(e) => setNuevaCategoria(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '13px', marginBottom: '8px' }} />
+            <button onClick={handleAgregarCategoria} style={{ width: '100%', padding: '8px', background: color, color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', marginBottom: '6px' }}>Guardar</button>
+            <button onClick={() => setMostrarFormCategoria(false)} style={{ width: '100%', padding: '8px', background: '#eee', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>Cancelar</button>
           </div>
         ) : (
           <button onClick={() => setMostrarFormCategoria(true)} style={{ width: '100%', padding: '10px', background: '#fff', border: '1px dashed #ddd', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', marginTop: '10px' }}>
@@ -183,17 +158,11 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
         )}
       </div>
 
-      {/* CONTENIDO */}
       <div style={{ flex: 1, padding: '24px' }}>
 
-        {/* VISTA CONFIGURACION */}
-        {vista === 'configuracion' && (
-          <Configuracion config={config} guardarConfig={guardarConfig} />
-        )}
-       {vista === 'estadisticas' && (
-          <Estadisticas pedidos={pedidos} config={config} />
-        )}
-        {/* VISTA PEDIDOS */}
+        {vista === 'configuracion' && <Configuracion config={config} guardarConfig={guardarConfig} />}
+        {vista === 'estadisticas' && <Estadisticas pedidos={pedidos} config={config} />}
+
         {vista === 'pedidos' && (
           <div>
             <h2 style={{ fontSize: '18px', marginBottom: '20px' }}>Pedidos en tiempo real</h2>
@@ -205,15 +174,14 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
                     <p style={{ fontWeight: '500', fontSize: '15px', margin: 0 }}>{pedido.nombre}</p>
                     <p style={{ fontSize: '13px', color: '#777', margin: 0 }}>{pedido.telefono}</p>
                     <p style={{ fontSize: '13px', color: '#777', margin: 0 }}>{pedido.direccion}</p>
+                    <p style={{ fontSize: '12px', color: '#aaa', margin: 0 }}>
+                      {pedido.tipoPedido === 'sitio' ? '🪑 Comer en el sitio' : '🛵 Domicilio'} — Pedido #{pedido.numeroPedido}
+                    </p>
                   </div>
                   <select
                     value={pedido.estado}
                     onChange={(e) => actualizarEstado(pedido.id, e.target.value)}
-                    style={{ padding: '8px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '13px', cursor: 'pointer',
-                      background: pedido.estado === 'pendiente' ? '#fff3cd' :
-                                  pedido.estado === 'preparando' ? '#cce5ff' :
-                                  pedido.estado === 'en camino' ? '#d4edda' : '#f8f9fa'
-                    }}
+                    style={{ padding: '8px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '13px', cursor: 'pointer', background: pedido.estado === 'pendiente' ? '#fff3cd' : pedido.estado === 'preparando' ? '#cce5ff' : pedido.estado === 'en camino' ? '#d4edda' : '#f8f9fa' }}
                   >
                     <option value="pendiente">Pendiente</option>
                     <option value="preparando">En preparacion</option>
@@ -233,15 +201,12 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
                     <span style={{ color: color }}>${pedido.total.toLocaleString()}</span>
                   </div>
                 </div>
-                <p style={{ fontSize: '11px', color: '#aaa', margin: '8px 0 0' }}>
-                  {new Date(pedido.fecha).toLocaleString()}
-                </p>
+                <p style={{ fontSize: '11px', color: '#aaa', margin: '8px 0 0' }}>{new Date(pedido.fecha).toLocaleString()}</p>
               </div>
             ))}
           </div>
         )}
 
-        {/* VISTA MENU */}
         {vista === 'menu' && !categoriaActiva && (
           <div style={{ textAlign: 'center', marginTop: '80px', color: '#aaa' }}>
             <p style={{ fontSize: '40px' }}>👈</p>
@@ -253,9 +218,7 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h2 style={{ fontSize: '18px' }}>{categorias.find((c) => c.id === categoriaActiva)?.nombre}</h2>
-              <button onClick={() => setMostrarFormPlato(!mostrarFormPlato)} style={{ padding: '10px 18px', background: color, color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', fontSize: '14px' }}>
-                + Nuevo plato
-              </button>
+              <button onClick={() => setMostrarFormPlato(!mostrarFormPlato)} style={{ padding: '10px 18px', background: color, color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', fontSize: '14px' }}>+ Nuevo plato</button>
             </div>
 
             {mostrarFormPlato && (

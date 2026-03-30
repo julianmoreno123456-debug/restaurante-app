@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useParams } from 'react-router-dom';
 import { db, auth } from './firebase';
-import { collection, onSnapshot, setDoc, doc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, setDoc, doc, deleteDoc, query, where, getDocs } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import Cliente from './pages/Cliente';
 import Admin from './pages/Admin';
 import Login from './pages/Login';
 import SuperAdmin from './pages/SuperAdmin';
+import Seguimiento from './pages/Seguimiento';
 import './App.css';
 
 const configInicial = {
@@ -46,9 +47,7 @@ function AdminWrapper() {
       setPedidos(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
     const unsubConfig = onSnapshot(collection(db, `restaurantes/${uid}/config`), (snap) => {
-      if (!snap.empty) {
-        setConfig({ id: snap.docs[0].id, ...snap.docs[0].data() });
-      }
+      if (!snap.empty) setConfig({ id: snap.docs[0].id, ...snap.docs[0].data() });
     });
     return () => { unsubCat(); unsubPlat(); unsubPed(); unsubConfig(); };
   }, [usuario]);
@@ -73,7 +72,6 @@ function AdminWrapper() {
   };
 
   if (cargando) return <div style={{ textAlign: 'center', marginTop: '100px' }}>Cargando...</div>;
-
   if (!usuario) return <Login />;
 
   return (
@@ -95,6 +93,7 @@ function ClienteWrapper({ uidRestaurante }) {
   const [platos, setPlatos] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [config, setConfig] = useState(configInicial);
+  const [restauranteInfo, setRestauranteInfo] = useState(null);
 
   useEffect(() => {
     if (!uidRestaurante) return;
@@ -105,37 +104,41 @@ function ClienteWrapper({ uidRestaurante }) {
       setPlatos(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
     const unsubConfig = onSnapshot(collection(db, `restaurantes/${uidRestaurante}/config`), (snap) => {
-      if (!snap.empty) {
-        setConfig({ id: snap.docs[0].id, ...snap.docs[0].data() });
-      }
+      if (!snap.empty) setConfig({ id: snap.docs[0].id, ...snap.docs[0].data() });
     });
-    return () => { unsubCat(); unsubPlat(); unsubConfig(); };
+    const unsubInfo = onSnapshot(doc(db, 'restaurantes', uidRestaurante), (snap) => {
+      if (snap.exists()) setRestauranteInfo(snap.data());
+    });
+    return () => { unsubCat(); unsubPlat(); unsubConfig(); unsubInfo(); };
   }, [uidRestaurante]);
 
-  return <Cliente platos={platos} categorias={categorias} config={config} uid={uidRestaurante} />;
-}
+  if (restauranteInfo?.suspendido) {
+    return (
+      <div style={{ textAlign: 'center', marginTop: '100px', padding: '20px' }}>
+        <p style={{ fontSize: '50px' }}>🔒</p>
+        <h2 style={{ fontSize: '20px', marginBottom: '8px' }}>Pagina temporalmente suspendida</h2>
+        <p style={{ color: '#999', fontSize: '14px' }}>Por favor contacta al restaurante para mas informacion</p>
+      </div>
+    );
+  }
 
-function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/restaurante/:slug" element={<ClienteWrapperRoute />} />
-        <Route path="/admin" element={<AdminWrapper />} />
-        <Route path="/superadmin" element={<SuperAdmin />} />
-        <Route path="/" element={<div style={{ textAlign: 'center', marginTop: '100px' }}><h1>Bienvenido</h1><p>Accede a tu restaurante con el enlace que te proporcionaron</p></div>} />
-      </Routes>
-    </BrowserRouter>
+    <Cliente
+      platos={platos}
+      categorias={categorias}
+      config={config}
+      uid={uidRestaurante}
+      pedidosHabilitados={restauranteInfo?.pedidosHabilitados !== false}
+    />
   );
 }
 
 function ClienteWrapperRoute() {
-  const { useParams } = require('react-router-dom');
-  const [uid, setUid] = React.useState(null);
   const { slug } = useParams();
+  const [uid, setUid] = useState(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const buscarUid = async () => {
-      const { collection, query, where, getDocs } = await import('firebase/firestore');
       const q = query(collection(db, 'restaurantes'), where('slug', '==', slug));
       const snap = await getDocs(q);
       if (!snap.empty) {
@@ -150,4 +153,39 @@ function ClienteWrapperRoute() {
   if (!uid) return <div style={{ textAlign: 'center', marginTop: '100px' }}>Cargando...</div>;
   return <ClienteWrapper uidRestaurante={uid} />;
 }
+
+function SeguimientoRoute() {
+  const { uid, pedidoId } = useParams();
+  const [config, setConfig] = useState(configInicial);
+
+  useEffect(() => {
+    if (!uid) return;
+    const unsub = onSnapshot(collection(db, `restaurantes/${uid}/config`), (snap) => {
+      if (!snap.empty) setConfig({ id: snap.docs[0].id, ...snap.docs[0].data() });
+    });
+    return () => unsub();
+  }, [uid]);
+
+  return <Seguimiento pedidoId={pedidoId} uid={uid} config={config} />;
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/restaurante/:slug" element={<ClienteWrapperRoute />} />
+        <Route path="/seguimiento/:uid/:pedidoId" element={<SeguimientoRoute />} />
+        <Route path="/admin" element={<AdminWrapper />} />
+        <Route path="/superadmin" element={<SuperAdmin />} />
+        <Route path="/" element={
+          <div style={{ textAlign: 'center', marginTop: '100px' }}>
+            <h1>Bienvenido a Lovecraft</h1>
+            <p>Accede a tu restaurante con el enlace que te proporcionaron</p>
+          </div>
+        } />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
 export default App;
