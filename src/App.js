@@ -7,7 +7,6 @@ import Cliente from './pages/Cliente';
 import Admin from './pages/Admin';
 import Login from './pages/Login';
 import SuperAdmin from './pages/SuperAdmin';
-import Seguimiento from './pages/Seguimiento';
 import './App.css';
 
 const configInicial = {
@@ -89,100 +88,107 @@ function AdminWrapper() {
   );
 }
 
-function ClienteWrapper({ uidRestaurante }) {
+function ClienteWrapperRoute() {
+  const { slug } = useParams();
+  const [uid, setUid] = useState(null);
+  const [estado, setEstado] = useState('cargando');
   const [platos, setPlatos] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [config, setConfig] = useState(configInicial);
   const [restauranteInfo, setRestauranteInfo] = useState(null);
 
   useEffect(() => {
-    if (!uidRestaurante) return;
-    const unsubCat = onSnapshot(collection(db, `restaurantes/${uidRestaurante}/categorias`), (snap) => {
+    const buscar = async () => {
+      try {
+        const q = query(collection(db, 'restaurantes'), where('slug', '==', slug));
+        const snap = await getDocs(q);
+        if (snap.empty) {
+          const directSnap = await getDocs(query(collection(db, 'restaurantes'), where('uid', '==', slug)));
+          if (directSnap.empty) {
+            setEstado('noexiste');
+            return;
+          }
+          const data = directSnap.docs[0].data();
+          setRestauranteInfo(data);
+          setUid(data.uid);
+        } else {
+          const data = snap.docs[0].data();
+          setRestauranteInfo(data);
+          setUid(data.uid);
+        }
+      } catch (e) {
+        setEstado('noexiste');
+      }
+    };
+    buscar();
+  }, [slug]);
+
+  useEffect(() => {
+    if (!uid) return;
+    const unsubConfig = onSnapshot(collection(db, `restaurantes/${uid}/config`), (snap) => {
+      if (!snap.empty) setConfig({ id: snap.docs[0].id, ...snap.docs[0].data() });
+      setEstado('listo');
+    });
+    const unsubCat = onSnapshot(collection(db, `restaurantes/${uid}/categorias`), (snap) => {
       setCategorias(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
-    const unsubPlat = onSnapshot(collection(db, `restaurantes/${uidRestaurante}/platos`), (snap) => {
+    const unsubPlat = onSnapshot(collection(db, `restaurantes/${uid}/platos`), (snap) => {
       setPlatos(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
-    const unsubConfig = onSnapshot(collection(db, `restaurantes/${uidRestaurante}/config`), (snap) => {
-      if (!snap.empty) setConfig({ id: snap.docs[0].id, ...snap.docs[0].data() });
+    const unsubInfo = onSnapshot(doc(db, 'restaurantes', uid), (snap) => {
+      if (!snap.exists()) {
+        setEstado('noexiste');
+        return;
+      }
+      setRestauranteInfo(snap.data());
+      if (snap.data().suspendido) setEstado('suspendido');
+      else setEstado('listo');
     });
-    const unsubInfo = onSnapshot(doc(db, 'restaurantes', uidRestaurante), (snap) => {
-      if (snap.exists()) setRestauranteInfo(snap.data());
-    });
-    return () => { unsubCat(); unsubPlat(); unsubConfig(); unsubInfo(); };
-  }, [uidRestaurante]);
+    return () => { unsubConfig(); unsubCat(); unsubPlat(); unsubInfo(); };
+  }, [uid]);
 
-  if (restauranteInfo?.suspendido) {
-    return (
-      <div style={{ textAlign: 'center', marginTop: '100px', padding: '20px' }}>
-        <p style={{ fontSize: '50px' }}>🔒</p>
-        <h2 style={{ fontSize: '20px', marginBottom: '8px' }}>Pagina temporalmente suspendida</h2>
-        <p style={{ color: '#999', fontSize: '14px' }}>Por favor contacta al restaurante para mas informacion</p>
-      </div>
-    );
-  }
+  if (estado === 'cargando') return <div style={{ textAlign: 'center', marginTop: '100px' }}>Cargando...</div>;
+
+  if (estado === 'noexiste') return (
+    <div style={{ textAlign: 'center', marginTop: '100px', padding: '20px' }}>
+      <p style={{ fontSize: '50px' }}>❌</p>
+      <h2>Esta pagina no existe</h2>
+      <p style={{ color: '#999' }}>El enlace no es valido o fue eliminado</p>
+    </div>
+  );
+
+  if (estado === 'suspendido') return (
+    <div style={{ textAlign: 'center', marginTop: '100px', padding: '20px' }}>
+      <p style={{ fontSize: '50px' }}>🔒</p>
+      <h2>Pagina temporalmente suspendida</h2>
+      <p style={{ color: '#999' }}>Contacta al restaurante para mas informacion</p>
+    </div>
+  );
 
   return (
     <Cliente
       platos={platos}
       categorias={categorias}
       config={config}
-      uid={uidRestaurante}
+      uid={uid}
       pedidosHabilitados={restauranteInfo?.pedidosHabilitados !== false}
     />
   );
-}
-
-function ClienteWrapperRoute() {
-  const { slug } = useParams();
-  const [uid, setUid] = useState(null);
-
-  useEffect(() => {
-    const buscarUid = async () => {
-      const q = query(collection(db, 'restaurantes'), where('slug', '==', slug));
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        setUid(snap.docs[0].data().uid);
-      } else {
-        setUid(slug);
-      }
-    };
-    buscarUid();
-  }, [slug]);
-
-  if (!uid) return <div style={{ textAlign: 'center', marginTop: '100px' }}>Cargando...</div>;
-  return <ClienteWrapper uidRestaurante={uid} />;
-}
-
-function SeguimientoRoute() {
-  const { uid, pedidoId } = useParams();
-  const [config, setConfig] = useState(configInicial);
-
-  useEffect(() => {
-    if (!uid) return;
-    const unsub = onSnapshot(collection(db, `restaurantes/${uid}/config`), (snap) => {
-      if (!snap.empty) setConfig({ id: snap.docs[0].id, ...snap.docs[0].data() });
-    });
-    return () => unsub();
-  }, [uid]);
-
-  return <Seguimiento pedidoId={pedidoId} uid={uid} config={config} />;
 }
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/restaurante/:slug" element={<ClienteWrapperRoute />} />
-        <Route path="/seguimiento/:uid/:pedidoId" element={<SeguimientoRoute />} />
-        <Route path="/admin" element={<AdminWrapper />} />
-        <Route path="/superadmin" element={<SuperAdmin />} />
         <Route path="/" element={
           <div style={{ textAlign: 'center', marginTop: '100px' }}>
             <h1>Bienvenido a Lovecraft</h1>
             <p>Accede a tu restaurante con el enlace que te proporcionaron</p>
           </div>
         } />
+        <Route path="/superadmin" element={<SuperAdmin />} />
+        <Route path="/admin" element={<AdminWrapper />} />
+        <Route path="/restaurante/:slug" element={<ClienteWrapperRoute />} />
       </Routes>
     </BrowserRouter>
   );
