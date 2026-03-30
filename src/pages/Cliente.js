@@ -14,17 +14,20 @@ function Cliente({ platos = [], categorias = [], config = {}, uid, pedidosHabili
     nombre: '',
     telefono: '',
     direccion: '',
-    tipoPedido: 'domicilio',
     mesa: '',
+    tipoPedido: 'domicilio',
   });
   const [pedidoEnviado, setPedidoEnviado] = useState(false);
 
   const color = config?.colorPrincipal || '#e74c3c';
 
+  // Pantalla de carga solo muestra cuando ya tenemos config del restaurante
   useEffect(() => {
-    const timer = setTimeout(() => setCargando(false), 2000);
-    return () => clearTimeout(timer);
-  }, []);
+    if (config?.nombre && config.nombre !== 'Mi Restaurante') {
+      const timer = setTimeout(() => setCargando(false), 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [config]);
 
   useEffect(() => {
     const datosGuardados = localStorage.getItem('datosPedido');
@@ -36,14 +39,14 @@ function Cliente({ platos = [], categorias = [], config = {}, uid, pedidosHabili
 
   if (cargando) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: color }}>
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: color, transition: 'background 0.3s' }}>
         {config?.logo ? (
           <img src={config.logo} alt="logo" style={{ width: '110px', height: '110px', borderRadius: '50%', objectFit: 'cover', border: '4px solid white', marginBottom: '20px' }} />
         ) : (
           <div style={{ fontSize: '60px', marginBottom: '20px' }}>🍽️</div>
         )}
         <p style={{ color: 'white', fontSize: '20px', fontWeight: '500', margin: '0 0 6px' }}>{config?.nombre || 'Cargando...'}</p>
-        <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px', margin: '0 0 24px' }}>{config?.descripcion || ''}</p>
+        {config?.descripcion && <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px', margin: '0 0 24px' }}>{config.descripcion}</p>}
         <div style={{ width: '48px', height: '4px', background: 'rgba(255,255,255,0.3)', borderRadius: '2px', overflow: 'hidden' }}>
           <div style={{ width: '40%', height: '100%', background: 'white', borderRadius: '2px', animation: 'slide 1s ease-in-out infinite' }} />
         </div>
@@ -114,7 +117,7 @@ function Cliente({ platos = [], categorias = [], config = {}, uid, pedidosHabili
       alert('Por favor ingresa la direccion de entrega');
       return;
     }
-    if (datosPedido.tipoPedido === 'mesa' && !datosPedido.mesa) {
+    if (datosPedido.tipoPedido === 'sitio' && !datosPedido.mesa) {
       alert('Por favor selecciona tu mesa');
       return;
     }
@@ -127,7 +130,9 @@ function Cliente({ platos = [], categorias = [], config = {}, uid, pedidosHabili
       await addDoc(collection(db, `restaurantes/${uid}/pedidos`), {
         nombre: datosPedido.nombre,
         telefono: datosPedido.telefono,
-        direccion: datosPedido.tipoPedido === 'domicilio' ? datosPedido.direccion : datosPedido.tipoPedido === 'mesa' ? `Mesa ${datosPedido.mesa}` : 'En el sitio',
+        direccion: datosPedido.tipoPedido === 'domicilio'
+          ? datosPedido.direccion
+          : `Mesa ${datosPedido.mesa}`,
         tipoPedido: datosPedido.tipoPedido,
         mesa: datosPedido.mesa || null,
         lat: coords ? coords.lat : null,
@@ -326,24 +331,18 @@ function Cliente({ platos = [], categorias = [], config = {}, uid, pedidosHabili
             <h3 style={{ marginBottom: '16px' }}>Datos del pedido</h3>
 
             {/* TIPO DE PEDIDO */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '16px' }}>
               <button
-                onClick={() => setDatosPedido({ ...datosPedido, tipoPedido: 'domicilio' })}
-                style={{ padding: '10px 6px', borderRadius: '8px', border: datosPedido.tipoPedido === 'domicilio' ? `2px solid ${color}` : '1px solid #ddd', background: datosPedido.tipoPedido === 'domicilio' ? color + '15' : 'white', cursor: 'pointer', fontSize: '12px', fontWeight: '500' }}
+                onClick={() => setDatosPedido({ ...datosPedido, tipoPedido: 'domicilio', mesa: '' })}
+                style={{ padding: '10px', borderRadius: '8px', border: datosPedido.tipoPedido === 'domicilio' ? `2px solid ${color}` : '1px solid #ddd', background: datosPedido.tipoPedido === 'domicilio' ? color + '15' : 'white', cursor: 'pointer', fontSize: '13px', fontWeight: '500' }}
               >
                 🛵 Domicilio
               </button>
               <button
-                onClick={() => setDatosPedido({ ...datosPedido, tipoPedido: 'sitio' })}
-                style={{ padding: '10px 6px', borderRadius: '8px', border: datosPedido.tipoPedido === 'sitio' ? `2px solid ${color}` : '1px solid #ddd', background: datosPedido.tipoPedido === 'sitio' ? color + '15' : 'white', cursor: 'pointer', fontSize: '12px', fontWeight: '500' }}
+                onClick={() => setDatosPedido({ ...datosPedido, tipoPedido: 'sitio', direccion: '' })}
+                style={{ padding: '10px', borderRadius: '8px', border: datosPedido.tipoPedido === 'sitio' ? `2px solid ${color}` : '1px solid #ddd', background: datosPedido.tipoPedido === 'sitio' ? color + '15' : 'white', cursor: 'pointer', fontSize: '13px', fontWeight: '500' }}
               >
                 🪑 Comer aqui
-              </button>
-              <button
-                onClick={() => setDatosPedido({ ...datosPedido, tipoPedido: 'mesa' })}
-                style={{ padding: '10px 6px', borderRadius: '8px', border: datosPedido.tipoPedido === 'mesa' ? `2px solid ${color}` : '1px solid #ddd', background: datosPedido.tipoPedido === 'mesa' ? color + '15' : 'white', cursor: 'pointer', fontSize: '12px', fontWeight: '500' }}
-              >
-                🍽️ Mesa
               </button>
             </div>
 
@@ -360,6 +359,7 @@ function Cliente({ platos = [], categorias = [], config = {}, uid, pedidosHabili
               style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px', marginBottom: '10px' }}
             />
 
+            {/* DOMICILIO: pide direccion / COMER AQUI: pide mesa */}
             {datosPedido.tipoPedido === 'domicilio' && (
               <input
                 placeholder="Direccion de entrega"
@@ -369,7 +369,7 @@ function Cliente({ platos = [], categorias = [], config = {}, uid, pedidosHabili
               />
             )}
 
-            {datosPedido.tipoPedido === 'mesa' && (
+            {datosPedido.tipoPedido === 'sitio' && (
               <select
                 value={datosPedido.mesa}
                 onChange={(e) => setDatosPedido({ ...datosPedido, mesa: e.target.value })}
