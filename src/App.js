@@ -7,7 +7,6 @@ import Cliente from './pages/Cliente';
 import Admin from './pages/Admin';
 import Login from './pages/Login';
 import SuperAdmin from './pages/SuperAdmin';
-import Seguimiento from './pages/Seguimiento';
 import './App.css';
 
 const configInicial = {
