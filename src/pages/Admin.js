@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { db, auth } from '../firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, addDoc, collection } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import Configuracion from './Configuracion';
 import Estadisticas from './Estadisticas';
 
-function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guardarPlato, eliminarPlato, pedidos = [], config, guardarConfig }) {
+function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guardarPlato, eliminarPlato, pedidos = [], config, guardarConfig, pedidosHabilitados = false, uid }) {
   const [vista, setVista] = useState('menu');
   const [categoriaActiva, setCategoriaActiva] = useState(null);
   const [mostrarFormCategoria, setMostrarFormCategoria] = useState(false);
@@ -15,6 +15,13 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
   const [nuevoPlato, setNuevoPlato] = useState({ nombre: '', precio: '', imagen: null, extras: [], opciones: [] });
   const [nuevoExtra, setNuevoExtra] = useState({ nombre: '', precio: 0, gratis: false });
   const [nuevaOpcion, setNuevaOpcion] = useState('');
+
+  // Pedido manual
+  const [carritoManual, setCarritoManual] = useState([]);
+  const [extrasElegidosManual, setExtrasElegidosManual] = useState({});
+  const [opcionesElegidasManual, setOpcionesElegidasManual] = useState({});
+  const [categoriaActivaManual, setCategoriaActivaManual] = useState(null);
+  const [datosManual, setDatosManual] = useState({ nombre: '', telefono: '', direccion: '', tipoPedido: 'domicilio', mesa: '' });
 
   const color = config?.colorPrincipal || '#e74c3c';
 
@@ -37,8 +44,7 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
   };
 
   const handleToggleCategoria = (cat) => {
-    const actualizada = { ...cat, activa: cat.activa === false ? true : false };
-    guardarCategoria(actualizada);
+    guardarCategoria({ ...cat, activa: cat.activa === false ? true : false });
   };
 
   const handleImagen = (e) => {
@@ -68,47 +74,111 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
 
   const handleAgregarExtra = (plato) => {
     if (!nuevoExtra.nombre) return;
-    const actualizado = {
-      ...plato,
-      extras: [...plato.extras, {
-        nombre: nuevoExtra.nombre,
-        precio: nuevoExtra.gratis ? 0 : Number(nuevoExtra.precio),
-      }],
-    };
-    guardarPlato(actualizado);
+    guardarPlato({ ...plato, extras: [...plato.extras, { nombre: nuevoExtra.nombre, precio: nuevoExtra.gratis ? 0 : Number(nuevoExtra.precio) }] });
     setNuevoExtra({ nombre: '', precio: 0, gratis: false });
     setPlatoSeleccionado(null);
   };
 
   const handleEliminarExtra = (plato, i) => {
-    const actualizado = { ...plato, extras: plato.extras.filter((_, idx) => idx !== i) };
-    guardarPlato(actualizado);
+    guardarPlato({ ...plato, extras: plato.extras.filter((_, idx) => idx !== i) });
   };
 
   const handleAgregarOpcion = (plato) => {
     if (!nuevaOpcion) return;
-    const actualizado = { ...plato, opciones: [...plato.opciones, nuevaOpcion] };
-    guardarPlato(actualizado);
+    guardarPlato({ ...plato, opciones: [...plato.opciones, nuevaOpcion] });
     setNuevaOpcion('');
     setPlatoSeleccionado(null);
   };
 
   const handleEliminarOpcion = (plato, i) => {
-    const actualizado = { ...plato, opciones: plato.opciones.filter((_, idx) => idx !== i) };
-    guardarPlato(actualizado);
+    guardarPlato({ ...plato, opciones: plato.opciones.filter((_, idx) => idx !== i) });
   };
 
   const actualizarEstado = async (pedidoId, nuevoEstado) => {
-    await updateDoc(doc(db, 'pedidos', pedidoId), { estado: nuevoEstado });
+    await updateDoc(doc(db, `restaurantes/${uid}/pedidos`, pedidoId), { estado: nuevoEstado });
+  };
+
+  // PEDIDO MANUAL
+  const agregarAlCarritoManual = (plato) => {
+    const extraElegido = extrasElegidosManual[plato.id] || null;
+    const precioExtra = extraElegido ? plato.extras.find((e) => e.nombre === extraElegido)?.precio || 0 : 0;
+    setCarritoManual([...carritoManual, {
+      ...plato,
+      extraElegido,
+      opcionesElegidas: opcionesElegidasManual[plato.id] || [],
+      precioFinal: plato.precio + precioExtra,
+    }]);
+  };
+
+  const eliminarDelCarritoManual = (i) => {
+    setCarritoManual(carritoManual.filter((_, idx) => idx !== i));
+  };
+
+  const toggleOpcionManual = (platoId, opcion) => {
+    const actuales = opcionesElegidasManual[platoId] || [];
+    if (actuales.includes(opcion)) {
+      setOpcionesElegidasManual({ ...opcionesElegidasManual, [platoId]: actuales.filter((o) => o !== opcion) });
+    } else {
+      setOpcionesElegidasManual({ ...opcionesElegidasManual, [platoId]: [...actuales, opcion] });
+    }
+  };
+
+  const totalManual = carritoManual.reduce((sum, p) => sum + p.precioFinal, 0);
+
+  const handleEnviarPedidoManual = async () => {
+    if (!datosManual.nombre || !datosManual.telefono) {
+      alert('Completa nombre y telefono');
+      return;
+    }
+    if (datosManual.tipoPedido === 'domicilio' && !datosManual.direccion) {
+      alert('Ingresa la direccion');
+      return;
+    }
+    if (datosManual.tipoPedido === 'sitio' && !datosManual.mesa) {
+      alert('Selecciona la mesa');
+      return;
+    }
+    if (carritoManual.length === 0) {
+      alert('Agrega al menos un producto');
+      return;
+    }
+    const numeroPedido = Math.floor(Math.random() * 9000 + 1000);
+    await addDoc(collection(db, `restaurantes/${uid}/pedidos`), {
+      nombre: datosManual.nombre,
+      telefono: datosManual.telefono,
+      direccion: datosManual.tipoPedido === 'domicilio' ? datosManual.direccion : `Mesa ${datosManual.mesa}`,
+      tipoPedido: datosManual.tipoPedido,
+      mesa: datosManual.mesa || null,
+      lat: null,
+      lng: null,
+      items: carritoManual.map((p) => ({
+        nombre: p.nombre,
+        precio: p.precioFinal,
+        extra: p.extraElegido || null,
+        opciones: p.opcionesElegidas || [],
+      })),
+      total: totalManual,
+      numeroPedido,
+      fecha: new Date().toISOString(),
+      estado: 'pendiente',
+      manual: true,
+    });
+    setCarritoManual([]);
+    setDatosManual({ nombre: '', telefono: '', direccion: '', tipoPedido: 'domicilio', mesa: '' });
+    alert('Pedido creado con exito');
   };
 
   const platosFiltrados = platos.filter((p) => p.categoriaId === categoriaActiva);
+  const platosFiltradosManual = categoriaActivaManual
+    ? platos.filter((p) => p.categoriaId === categoriaActivaManual)
+    : platos;
+  const mesas = Array.from({ length: 20 }, (_, i) => i + 1);
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#f5f5f5' }}>
 
+      {/* SIDEBAR */}
       <div style={{ width: '220px', background: 'white', padding: '20px', borderRight: '1px solid #eee', flexShrink: 0 }}>
-
         <div style={{ textAlign: 'center', marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid #eee' }}>
           {config?.logo && <img src={config.logo} alt="logo" style={{ width: '60px', height: '60px', borderRadius: '50%', objectFit: 'cover', marginBottom: '8px' }} />}
           <p style={{ fontWeight: '500', fontSize: '14px', margin: 0 }}>{config?.nombre || 'Mi Restaurante'}</p>
@@ -128,7 +198,12 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
             )}
           </button>
           <button onClick={() => setVista('configuracion')} style={{ width: '100%', padding: '10px', marginBottom: '6px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '14px', background: vista === 'configuracion' ? color : '#f5f5f5', color: vista === 'configuracion' ? 'white' : '#333' }}>Configuracion</button>
-          <button onClick={() => setVista('estadisticas')} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '14px', background: vista === 'estadisticas' ? color : '#f5f5f5', color: vista === 'estadisticas' ? 'white' : '#333' }}>Estadisticas</button>
+          <button onClick={() => setVista('estadisticas')} style={{ width: '100%', padding: '10px', marginBottom: '6px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '14px', background: vista === 'estadisticas' ? color : '#f5f5f5', color: vista === 'estadisticas' ? 'white' : '#333' }}>Estadisticas</button>
+          {pedidosHabilitados && (
+            <button onClick={() => setVista('pedido_manual')} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '14px', background: vista === 'pedido_manual' ? color : '#f5f5f5', color: vista === 'pedido_manual' ? 'white' : '#333' }}>
+              Nuevo pedido
+            </button>
+          )}
         </div>
 
         <h2 style={{ fontSize: '14px', marginBottom: '12px', color: '#999' }}>CATEGORIAS</h2>
@@ -138,7 +213,7 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
             <span onClick={() => { setCategoriaActiva(cat.id); setVista('menu'); }} style={{ flex: 1, fontSize: '13px', opacity: cat.activa === false ? 0.4 : 1 }}>
               {cat.emoji} {cat.nombre}
             </span>
-            <button onClick={() => handleToggleCategoria(cat)} title={cat.activa === false ? 'Activar' : 'Desactivar'} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px' }}>
+            <button onClick={() => handleToggleCategoria(cat)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px' }}>
               {cat.activa === false ? '👁️' : '🙈'}
             </button>
             <button onClick={() => handleEliminarCategoria(cat.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px' }}>🗑️</button>
@@ -158,10 +233,135 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
         )}
       </div>
 
+      {/* CONTENIDO */}
       <div style={{ flex: 1, padding: '24px' }}>
 
         {vista === 'configuracion' && <Configuracion config={config} guardarConfig={guardarConfig} />}
         {vista === 'estadisticas' && <Estadisticas pedidos={pedidos} config={config} />}
+
+        {/* PEDIDO MANUAL */}
+        {vista === 'pedido_manual' && (
+          <div style={{ display: 'flex', gap: '20px' }}>
+
+            {/* MENU */}
+            <div style={{ flex: 1 }}>
+              <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>Nuevo pedido manual</h2>
+
+              {/* CATEGORIAS */}
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
+                <button
+                  onClick={() => setCategoriaActivaManual(null)}
+                  style={{ padding: '6px 14px', borderRadius: '20px', border: 'none', cursor: 'pointer', fontSize: '13px', background: categoriaActivaManual === null ? color : '#eee', color: categoriaActivaManual === null ? 'white' : '#333' }}
+                >
+                  Todos
+                </button>
+                {categorias.filter(c => c.activa !== false).map((cat) => (
+                  <button
+                    key={cat.id}
+                    onClick={() => setCategoriaActivaManual(cat.id)}
+                    style={{ padding: '6px 14px', borderRadius: '20px', border: 'none', cursor: 'pointer', fontSize: '13px', background: categoriaActivaManual === cat.id ? color : '#eee', color: categoriaActivaManual === cat.id ? 'white' : '#333' }}
+                  >
+                    {cat.emoji} {cat.nombre}
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px' }}>
+                {platosFiltradosManual.map((plato) => (
+                  <div key={plato.id} style={{ background: 'white', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+                    {plato.imagen ? (
+                      <img src={plato.imagen} alt={plato.nombre} style={{ width: '100%', height: '100px', objectFit: 'cover' }} />
+                    ) : (
+                      <div style={{ width: '100%', height: '100px', background: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '30px' }}>🍔</div>
+                    )}
+                    <div style={{ padding: '10px' }}>
+                      <p style={{ fontWeight: '500', fontSize: '13px', margin: '0 0 4px' }}>{plato.nombre}</p>
+                      <p style={{ color: color, fontSize: '13px', margin: '0 0 8px' }}>${plato.precio.toLocaleString()}</p>
+
+                      {plato.extras.length > 0 && (
+                        <select onChange={(e) => setExtrasElegidosManual({ ...extrasElegidosManual, [plato.id]: e.target.value })} style={{ width: '100%', padding: '5px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '11px', marginBottom: '6px' }}>
+                          <option value="">Sin extra</option>
+                          {plato.extras.map((extra, i) => (
+                            <option key={i} value={extra.nombre}>{extra.nombre} {extra.precio > 0 ? '+$' + extra.precio.toLocaleString() : '(gratis)'}</option>
+                          ))}
+                        </select>
+                      )}
+
+                      {plato.opciones.length > 0 && (
+                        <div style={{ marginBottom: '6px' }}>
+                          {plato.opciones.map((op, i) => (
+                            <label key={i} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', marginBottom: '2px', cursor: 'pointer' }}>
+                              <input type="checkbox" checked={(opcionesElegidasManual[plato.id] || []).includes(op)} onChange={() => toggleOpcionManual(plato.id, op)} />
+                              {op}
+                            </label>
+                          ))}
+                        </div>
+                      )}
+
+                      <button onClick={() => agregarAlCarritoManual(plato)} style={{ width: '100%', padding: '6px', background: color, color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '12px' }}>
+                        Agregar
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* FORMULARIO */}
+            <div style={{ width: '300px', flexShrink: 0 }}>
+              <div style={{ background: 'white', borderRadius: '14px', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', position: 'sticky', top: '24px' }}>
+                <h3 style={{ fontSize: '15px', marginBottom: '14px' }}>Datos del pedido</h3>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '12px' }}>
+                  <button onClick={() => setDatosManual({ ...datosManual, tipoPedido: 'domicilio', mesa: '' })} style={{ padding: '8px', borderRadius: '8px', border: datosManual.tipoPedido === 'domicilio' ? `2px solid ${color}` : '1px solid #ddd', background: datosManual.tipoPedido === 'domicilio' ? color + '15' : 'white', cursor: 'pointer', fontSize: '12px', fontWeight: '500' }}>
+                    🛵 Domicilio
+                  </button>
+                  <button onClick={() => setDatosManual({ ...datosManual, tipoPedido: 'sitio', direccion: '' })} style={{ padding: '8px', borderRadius: '8px', border: datosManual.tipoPedido === 'sitio' ? `2px solid ${color}` : '1px solid #ddd', background: datosManual.tipoPedido === 'sitio' ? color + '15' : 'white', cursor: 'pointer', fontSize: '12px', fontWeight: '500' }}>
+                    🪑 Mesa
+                  </button>
+                </div>
+
+                <input placeholder="Nombre del cliente" value={datosManual.nombre} onChange={(e) => setDatosManual({ ...datosManual, nombre: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '13px', marginBottom: '8px' }} />
+                <input placeholder="Telefono" value={datosManual.telefono} onChange={(e) => setDatosManual({ ...datosManual, telefono: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '13px', marginBottom: '8px' }} />
+
+                {datosManual.tipoPedido === 'domicilio' && (
+                  <input placeholder="Direccion" value={datosManual.direccion} onChange={(e) => setDatosManual({ ...datosManual, direccion: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '13px', marginBottom: '8px' }} />
+                )}
+
+                {datosManual.tipoPedido === 'sitio' && (
+                  <select value={datosManual.mesa} onChange={(e) => setDatosManual({ ...datosManual, mesa: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '13px', marginBottom: '8px' }}>
+                    <option value="">Selecciona la mesa</option>
+                    {mesas.map((m) => <option key={m} value={m}>Mesa {m}</option>)}
+                  </select>
+                )}
+
+                <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '10px', marginTop: '4px', marginBottom: '10px' }}>
+                  <p style={{ fontSize: '13px', fontWeight: '500', marginBottom: '8px' }}>Productos</p>
+                  {carritoManual.length === 0 && <p style={{ color: '#aaa', fontSize: '12px' }}>No hay productos aun</p>}
+                  {carritoManual.map((p, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', marginBottom: '6px' }}>
+                      <div>
+                        <p style={{ margin: 0, fontWeight: '500' }}>{p.nombre}</p>
+                        {p.extraElegido && <p style={{ margin: 0, color: '#777' }}>+ {p.extraElegido}</p>}
+                        {p.opcionesElegidas.length > 0 && <p style={{ margin: 0, color: '#777' }}>{p.opcionesElegidas.join(', ')}</p>}
+                        <p style={{ margin: 0, color: color }}>${p.precioFinal.toLocaleString()}</p>
+                      </div>
+                      <button onClick={() => eliminarDelCarritoManual(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }}>🗑️</button>
+                    </div>
+                  ))}
+                </div>
+
+                {carritoManual.length > 0 && (
+                  <p style={{ fontWeight: '500', fontSize: '14px', color: color, marginBottom: '10px' }}>Total: ${totalManual.toLocaleString()}</p>
+                )}
+
+                <button onClick={handleEnviarPedidoManual} style={{ width: '100%', padding: '10px', background: color, color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', fontSize: '14px' }}>
+                  Confirmar pedido
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {vista === 'pedidos' && (
           <div>
@@ -171,11 +371,14 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
               <div key={pedido.id} style={{ background: 'white', borderRadius: '14px', padding: '16px', marginBottom: '14px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
                   <div>
-                    <p style={{ fontWeight: '500', fontSize: '15px', margin: 0 }}>{pedido.nombre}</p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+                      <p style={{ fontWeight: '500', fontSize: '15px', margin: 0 }}>{pedido.nombre}</p>
+                      {pedido.manual && <span style={{ fontSize: '10px', background: '#f0f0f0', padding: '2px 6px', borderRadius: '10px', color: '#777' }}>Manual</span>}
+                    </div>
                     <p style={{ fontSize: '13px', color: '#777', margin: 0 }}>{pedido.telefono}</p>
                     <p style={{ fontSize: '13px', color: '#777', margin: 0 }}>{pedido.direccion}</p>
                     <p style={{ fontSize: '12px', color: '#aaa', margin: 0 }}>
-                      {pedido.tipoPedido === 'sitio' ? '🪑 Comer en el sitio' : '🛵 Domicilio'} — Pedido #{pedido.numeroPedido}
+                      {pedido.tipoPedido === 'sitio' ? '🪑 Mesa' : '🛵 Domicilio'} — #{pedido.numeroPedido}
                     </p>
                   </div>
                   <select
