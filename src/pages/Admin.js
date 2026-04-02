@@ -167,6 +167,77 @@ const adminStyles = `
   }
   .sidebar-logout:hover { background: rgba(231,76,60,0.1); border-color: rgba(231,76,60,0.3); color: #e74c3c; }
 
+  /* HAMBURGER */
+  .sidebar-hamburger {
+    display: none;
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    z-index: 400;
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    background: #111;
+    border: none;
+    cursor: pointer;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    transition: background 0.15s;
+  }
+  .sidebar-hamburger:hover { background: #222; }
+  .sidebar-hamburger span {
+    display: block;
+    width: 18px;
+    height: 2px;
+    background: white;
+    border-radius: 2px;
+    transition: all 0.25s;
+    transform-origin: center;
+  }
+  .sidebar-hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+  .sidebar-hamburger.open span:nth-child(2) { opacity: 0; transform: scaleX(0); }
+  .sidebar-hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+  /* OVERLAY MOBILE */
+  .sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: 300;
+    animation: fadeInOverlay 0.2s ease;
+  }
+  @keyframes fadeInOverlay { from { opacity: 0; } to { opacity: 1; } }
+
+  /* RESPONSIVE */
+  @media (max-width: 768px) {
+    .sidebar-hamburger { display: flex; }
+    .sidebar-overlay.visible { display: block; }
+
+    .admin-sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100vh;
+      z-index: 350;
+      transform: translateX(-100%);
+      transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: none;
+    }
+    .admin-sidebar.open {
+      transform: translateX(0);
+      box-shadow: 4px 0 32px rgba(0,0,0,0.35);
+    }
+
+    .admin-main {
+      padding: 80px 16px 24px;
+      width: 100%;
+    }
+  }
+
   /* MAIN */
   .admin-main { flex: 1; padding: 28px 32px; min-width: 0; }
 
@@ -417,6 +488,7 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
   const [nuevoExtra, setNuevoExtra] = useState({ nombre: '', precio: 0, gratis: false });
   const [nuevaOpcion, setNuevaOpcion] = useState('');
 
+  const [sidebarAbierto, setSidebarAbierto] = useState(false);
   const [carritoManual, setCarritoManual] = useState([]);
   const [extrasElegidosManual, setExtrasElegidosManual] = useState({});
   const [opcionesElegidasManual, setOpcionesElegidasManual] = useState({});
@@ -564,8 +636,23 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
     <div className="admin-root" style={{ '--accent': color }}>
       <style>{adminStyles}</style>
 
+      {/* HAMBURGER */}
+      <button
+        className={`sidebar-hamburger ${sidebarAbierto ? 'open' : ''}`}
+        onClick={() => setSidebarAbierto(!sidebarAbierto)}
+        aria-label="Abrir menú"
+      >
+        <span /><span /><span />
+      </button>
+
+      {/* OVERLAY MOBILE */}
+      <div
+        className={`sidebar-overlay ${sidebarAbierto ? 'visible' : ''}`}
+        onClick={() => setSidebarAbierto(false)}
+      />
+
       {/* SIDEBAR */}
-      <div className="admin-sidebar">
+      <div className={`admin-sidebar ${sidebarAbierto ? 'open' : ''}`}>
         <div className="sidebar-brand">
           {config?.logo
             ? <img src={config.logo} alt="logo" className="sidebar-logo" />
@@ -580,7 +667,7 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
             <button
               key={item.key}
               className={`sidebar-btn ${vista === item.key ? 'active' : ''}`}
-              onClick={() => setVista(item.key)}
+              onClick={() => { setVista(item.key); setSidebarAbierto(false); }}
             >
               <span className="sidebar-icon">{item.icon}</span>
               {item.label}
@@ -597,7 +684,7 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
             <div
               key={cat.id}
               className={`sidebar-cat-item ${categoriaActiva === cat.id && vista === 'menu' ? 'active' : ''}`}
-              onClick={() => { setCategoriaActiva(cat.id); setVista('menu'); }}
+              onClick={() => { setCategoriaActiva(cat.id); setVista('menu'); setSidebarAbierto(false); }}
             >
               <span style={{ fontSize: '14px', opacity: cat.activa === false ? 0.35 : 1 }}>{cat.emoji}</span>
               <span className="sidebar-cat-name" style={{ opacity: cat.activa === false ? 0.4 : 1 }}>
