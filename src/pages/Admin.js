@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { db, auth } from '../firebase';
-import { doc, updateDoc, addDoc, collection } from 'firebase/firestore';
+import { doc, updateDoc, addDoc, collection, getDoc, setDoc, increment } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import Configuracion from './Configuracion';
 import Estadisticas from './Estadisticas';
@@ -233,8 +233,18 @@ const adminStyles = `
     }
 
     .admin-main {
-      padding: 80px 16px 24px;
+      padding: 72px 16px 24px;
       width: 100%;
+    }
+
+    .admin-page-title {
+      padding-left: 0;
+    }
+
+    /* Empujar contenido de subpáginas en móvil */
+    .cfg-root,
+    .cfg-title {
+      padding-top: 0 !important;
     }
   }
 
@@ -483,6 +493,9 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
   const [mostrarFormCategoria, setMostrarFormCategoria] = useState(false);
   const [mostrarFormPlato, setMostrarFormPlato] = useState(false);
   const [nuevaCategoria, setNuevaCategoria] = useState('');
+  const [editandoCategoria, setEditandoCategoria] = useState(null); // { id, nombre }
+  const [editandoPlato, setEditandoPlato] = useState(null); // plato completo
+  const [editandoPlatoImagen, setEditandoPlatoImagen] = useState(null);
   const [platoSeleccionado, setPlatoSeleccionado] = useState(null);
   const [nuevoPlato, setNuevoPlato] = useState({ nombre: '', precio: '', imagen: null, extras: [], opciones: [] });
   const [nuevoExtra, setNuevoExtra] = useState({ nombre: '', precio: 0, gratis: false });
@@ -498,6 +511,32 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
   const color = config?.colorPrincipal || '#e74c3c';
 
   const handleCerrarSesion = async () => { await signOut(auth); };
+
+  const handleGuardarEdicionCategoria = () => {
+    if (!editandoCategoria?.nombre.trim()) return;
+    const cat = categorias.find(c => c.id === editandoCategoria.id);
+    if (cat) guardarCategoria({ ...cat, nombre: editandoCategoria.nombre.trim() });
+    setEditandoCategoria(null);
+  };
+
+  const handleImagenEdicion = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => setEditandoPlatoImagen(reader.result);
+    reader.readAsDataURL(file);
+  };
+
+  const handleGuardarEdicionPlato = () => {
+    if (!editandoPlato?.nombre || !editandoPlato?.precio) return;
+    guardarPlato({
+      ...editandoPlato,
+      precio: Number(editandoPlato.precio),
+      imagen: editandoPlatoImagen !== null ? editandoPlatoImagen : editandoPlato.imagen,
+    });
+    setEditandoPlato(null);
+    setEditandoPlatoImagen(null);
+  };
 
   const handleAgregarCategoria = () => {
     if (!nuevaCategoria) return;
@@ -585,14 +624,30 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
     }
   };
 
+  const COSTO_DOMICILIO = 2000;
   const totalManual = carritoManual.reduce((sum, p) => sum + p.precioFinal, 0);
+  const totalManualConDomicilio = totalManual + (datosManual.tipoPedido === 'domicilio' ? COSTO_DOMICILIO : 0);
 
   const handleEnviarPedidoManual = async () => {
     if (!datosManual.nombre || !datosManual.telefono) { alert('Completa nombre y telefono'); return; }
     if (datosManual.tipoPedido === 'domicilio' && !datosManual.direccion) { alert('Ingresa la direccion'); return; }
     if (datosManual.tipoPedido === 'sitio' && !datosManual.mesa) { alert('Selecciona la mesa'); return; }
     if (carritoManual.length === 0) { alert('Agrega al menos un producto'); return; }
-    const numeroPedido = Math.floor(Math.random() * 9000 + 1000);
+    const hoy = new Date().toISOString().slice(0, 10);
+    const contadorRef = doc(db, `restaurantes/${uid}/contadores`, hoy);
+    let numeroPedido = 1;
+    try {
+      const snap = await getDoc(contadorRef);
+      if (snap.exists()) {
+        numeroPedido = (snap.data().contador || 0) + 1;
+        await updateDoc(contadorRef, { contador: increment(1) });
+      } else {
+        await setDoc(contadorRef, { contador: 1, fecha: hoy });
+        numeroPedido = 1;
+      }
+    } catch (e) {
+      numeroPedido = Math.floor(Math.random() * 90 + 1);
+    }
     await addDoc(collection(db, `restaurantes/${uid}/pedidos`), {
       nombre: datosManual.nombre,
       telefono: datosManual.telefono,
@@ -601,7 +656,7 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
       mesa: datosManual.mesa || null,
       lat: null, lng: null,
       items: carritoManual.map((p) => ({ nombre: p.nombre, precio: p.precioFinal, extra: p.extraElegido || null, opciones: p.opcionesElegidas || [] })),
-      total: totalManual,
+      total: totalManualConDomicilio,
       numeroPedido,
       fecha: new Date().toISOString(),
       estado: 'pendiente',
@@ -681,23 +736,40 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
         <div className="sidebar-section" style={{ flex: 1 }}>
           <div className="sidebar-section-label">Categorías</div>
           {categorias.map((cat) => (
-            <div
-              key={cat.id}
-              className={`sidebar-cat-item ${categoriaActiva === cat.id && vista === 'menu' ? 'active' : ''}`}
-              onClick={() => { setCategoriaActiva(cat.id); setVista('menu'); setSidebarAbierto(false); }}
-            >
-              <span style={{ fontSize: '14px', opacity: cat.activa === false ? 0.35 : 1 }}>{cat.emoji}</span>
-              <span className="sidebar-cat-name" style={{ opacity: cat.activa === false ? 0.4 : 1 }}>
-                {cat.nombre}
-              </span>
-              <div className="sidebar-cat-actions">
-                <button className="sidebar-cat-action-btn" onClick={(e) => { e.stopPropagation(); handleToggleCategoria(cat); }} title={cat.activa === false ? 'Mostrar' : 'Ocultar'}>
-                  {cat.activa === false ? '👁️' : '🙈'}
-                </button>
-                <button className="sidebar-cat-action-btn" onClick={(e) => { e.stopPropagation(); handleEliminarCategoria(cat.id); }} title="Eliminar">
-                  🗑️
-                </button>
-              </div>
+            <div key={cat.id}>
+              {editandoCategoria?.id === cat.id ? (
+                <div style={{ padding: '6px 8px' }}>
+                  <input
+                    className="form-input"
+                    value={editandoCategoria.nombre}
+                    onChange={(e) => setEditandoCategoria({ ...editandoCategoria, nombre: e.target.value })}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleGuardarEdicionCategoria(); if (e.key === 'Escape') setEditandoCategoria(null); }}
+                    style={{ marginBottom: '6px', background: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.15)', color: '#fff' }}
+                    autoFocus
+                  />
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <button onClick={handleGuardarEdicionCategoria} style={{ flex: 1, padding: '7px', background: color, color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontFamily: 'DM Sans, sans-serif' }}>Guardar</button>
+                    <button onClick={() => setEditandoCategoria(null)} style={{ flex: 1, padding: '7px', background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.5)', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontFamily: 'DM Sans, sans-serif' }}>Cancelar</button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className={`sidebar-cat-item ${categoriaActiva === cat.id && vista === 'menu' ? 'active' : ''}`}
+                  onClick={() => { setCategoriaActiva(cat.id); setVista('menu'); setSidebarAbierto(false); }}
+                >
+                  <span style={{ fontSize: '14px', opacity: cat.activa === false ? 0.35 : 1 }}>{cat.emoji}</span>
+                  <span className="sidebar-cat-name" style={{ opacity: cat.activa === false ? 0.4 : 1 }}>
+                    {cat.nombre}
+                  </span>
+                  <div className="sidebar-cat-actions">
+                    <button className="sidebar-cat-action-btn" onClick={(e) => { e.stopPropagation(); setEditandoCategoria({ id: cat.id, nombre: cat.nombre }); }} title="Editar">✏️</button>
+                    <button className="sidebar-cat-action-btn" onClick={(e) => { e.stopPropagation(); handleToggleCategoria(cat); }} title={cat.activa === false ? 'Mostrar' : 'Ocultar'}>
+                      {cat.activa === false ? '👁️' : '🙈'}
+                    </button>
+                    <button className="sidebar-cat-action-btn" onClick={(e) => { e.stopPropagation(); handleEliminarCategoria(cat.id); }} title="Eliminar">🗑️</button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
 
@@ -855,7 +927,21 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
                   </div>
 
                   {carritoManual.length > 0 && (
-                    <p className="carrito-total" style={{ color }}>Total: ${totalManual.toLocaleString()}</p>
+                    <div style={{ borderTop: '1px solid #f0f0ee', paddingTop: '10px', marginBottom: '12px' }}>
+                      {datosManual.tipoPedido === 'domicilio' && (
+                        <>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', color: '#888', marginBottom: '4px' }}>
+                            <span>Subtotal</span>
+                            <span>${totalManual.toLocaleString()}</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', color: '#888', marginBottom: '6px' }}>
+                            <span>🛵 Domicilio</span>
+                            <span>$2.000</span>
+                          </div>
+                        </>
+                      )}
+                      <p className="carrito-total" style={{ color, margin: 0 }}>Total: ${totalManualConDomicilio.toLocaleString()}</p>
+                    </div>
                   )}
 
                   <button
@@ -927,7 +1013,14 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
 
                     {pedido.telefono && (
                       <a
-                        href={`https://wa.me/${pedido.telefono.replace(/\D/g, '').startsWith('57') ? pedido.telefono.replace(/\D/g, '') : '57' + pedido.telefono.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${pedido.nombre}! 🎉 Tu pedido #${pedido.numeroPedido} ya esta ${pedido.estado === 'preparando' ? 'en preparacion' : pedido.estado === 'en camino' ? 'en camino, pronto llegara' : pedido.estado === 'entregado' ? 'entregado' : 'recibido'}. Total: $${pedido.total.toLocaleString()}. Tiempo estimado: ${config?.tiempoEntrega || '30-45'} min. Gracias! 🍔`)}`}
+                        href={`https://wa.me/${pedido.telefono.replace(/\D/g, '').startsWith('57') ? pedido.telefono.replace(/\D/g, '') : '57' + pedido.telefono.replace(/\D/g, '')}?text=${encodeURIComponent(
+                          (config?.mensajeWhatsapp || 'Hola {nombre}! 🎉 Tu pedido #{numero} ya está {estado}. Total: ${total}. Tiempo estimado: {tiempo} min. ¡Gracias! 🍔')
+                            .replace('{nombre}', pedido.nombre)
+                            .replace('{numero}', pedido.numeroPedido)
+                            .replace('{estado}', pedido.estado === 'preparando' ? 'en preparación' : pedido.estado === 'en camino' ? 'en camino, pronto llegará' : pedido.estado === 'entregado' ? 'entregado' : 'recibido')
+                            .replace('{total}', pedido.total.toLocaleString())
+                            .replace('{tiempo}', config?.tiempoEntrega || '30-45')
+                        )}`}
                         target="_blank"
                         rel="noreferrer"
                         className="btn-whatsapp"
@@ -991,6 +1084,52 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
 
             {platosFiltrados.length > 0 && (
               <div className="admin-card">
+                {/* MODAL EDICIÓN PLATO */}
+                {editandoPlato && (
+                  <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+                    <div style={{ background: 'white', borderRadius: '20px', padding: '24px', width: '100%', maxWidth: '420px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+                      <h3 style={{ fontFamily: 'Syne, sans-serif', fontSize: '16px', fontWeight: 700, marginBottom: '18px', color: '#111' }}>Editar plato</h3>
+                      <label style={{ fontSize: '12px', color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '6px' }}>Nombre</label>
+                      <input
+                        className="form-input"
+                        value={editandoPlato.nombre}
+                        onChange={(e) => setEditandoPlato({ ...editandoPlato, nombre: e.target.value })}
+                        style={{ marginBottom: '12px' }}
+                        autoFocus
+                      />
+                      <label style={{ fontSize: '12px', color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '6px' }}>Precio</label>
+                      <input
+                        className="form-input"
+                        type="number"
+                        value={editandoPlato.precio}
+                        onChange={(e) => setEditandoPlato({ ...editandoPlato, precio: e.target.value })}
+                        style={{ marginBottom: '12px' }}
+                      />
+                      <label style={{ fontSize: '12px', color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '6px' }}>Foto del plato</label>
+                      <input type="file" accept="image/*" onChange={handleImagenEdicion} style={{ fontSize: '13px', marginBottom: '10px', width: '100%' }} />
+                      {(editandoPlatoImagen || editandoPlato.imagen) && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+                          <img
+                            src={editandoPlatoImagen || editandoPlato.imagen}
+                            alt="preview"
+                            style={{ width: '64px', height: '64px', objectFit: 'cover', borderRadius: '10px' }}
+                          />
+                          <button
+                            onClick={() => { setEditandoPlatoImagen(''); setEditandoPlato({ ...editandoPlato, imagen: null }); }}
+                            style={{ padding: '6px 12px', background: '#fee', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', color: '#c0392b' }}
+                          >
+                            Quitar foto
+                          </button>
+                        </div>
+                      )}
+                      <div className="form-actions" style={{ marginTop: '4px' }}>
+                        <button className="btn-accent" onClick={handleGuardarEdicionPlato}>Guardar cambios</button>
+                        <button className="btn-secondary" onClick={() => { setEditandoPlato(null); setEditandoPlatoImagen(null); }}>Cancelar</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {platosFiltrados.map((plato) => (
                   <div key={plato.id} className="plato-card">
                     <div className="plato-card-header">
@@ -1002,7 +1141,8 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
                         <div className="plato-name">{plato.nombre}</div>
                         <div className="plato-price">${plato.precio.toLocaleString()}</div>
                       </div>
-                      <button className="btn-icon" onClick={() => eliminarPlato(plato.id)} style={{ fontSize: '16px' }}>🗑️</button>
+                      <button className="btn-icon" onClick={() => { setEditandoPlato({ ...plato }); setEditandoPlatoImagen(null); }} style={{ fontSize: '15px' }} title="Editar">✏️</button>
+                      <button className="btn-icon" onClick={() => eliminarPlato(plato.id)} style={{ fontSize: '15px' }} title="Eliminar">🗑️</button>
                     </div>
 
                     <div className="plato-section">

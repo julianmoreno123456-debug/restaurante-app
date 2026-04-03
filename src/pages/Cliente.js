@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../firebase';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, getDoc, setDoc, updateDoc, increment } from 'firebase/firestore';
 
 const clienteStyles = `
   @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
@@ -528,7 +528,21 @@ function Cliente({ platos = [], categorias = [], config = {}, uid, pedidosHabili
     try {
       localStorage.setItem('datosPedido', JSON.stringify(datosPedido));
       const coords = datosPedido.tipoPedido === 'domicilio' ? await obtenerCoordenadas(datosPedido.direccion) : null;
-      const numeroPedido = Math.floor(Math.random() * 9000 + 1000);
+      const hoy = new Date().toISOString().slice(0, 10);
+      const contadorRef = doc(db, `restaurantes/${uid}/contadores`, hoy);
+      let numeroPedido = 1;
+      try {
+        const snap = await getDoc(contadorRef);
+        if (snap.exists()) {
+          numeroPedido = (snap.data().contador || 0) + 1;
+          await updateDoc(contadorRef, { contador: increment(1) });
+        } else {
+          await setDoc(contadorRef, { contador: 1, fecha: hoy });
+          numeroPedido = 1;
+        }
+      } catch (e) {
+        numeroPedido = Math.floor(Math.random() * 90 + 1);
+      }
       await addDoc(collection(db, `restaurantes/${uid}/pedidos`), {
         nombre: datosPedido.nombre,
         telefono: datosPedido.telefono,

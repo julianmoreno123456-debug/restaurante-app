@@ -180,6 +180,62 @@ const configStyles = `
     padding: 3px;
     flex-shrink: 0;
   }
+
+  .cfg-textarea {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid #e8e8e8;
+    border-radius: 10px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    color: #111;
+    outline: none;
+    transition: border-color 0.15s;
+    background: #fff;
+    resize: vertical;
+    min-height: 110px;
+    line-height: 1.5;
+  }
+  .cfg-textarea:focus { border-color: #111; }
+
+  .cfg-vars {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+  }
+
+  .cfg-var-chip {
+    padding: 4px 10px;
+    background: #f0f0ee;
+    border-radius: 20px;
+    font-size: 12px;
+    font-family: 'DM Sans', monospace;
+    color: #555;
+    cursor: pointer;
+    border: none;
+    transition: background 0.15s;
+  }
+  .cfg-var-chip:hover { background: #e0e0dd; color: #111; }
+
+  .cfg-preview-box {
+    margin-top: 12px;
+    padding: 12px 14px;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 10px;
+    font-size: 13px;
+    color: #166534;
+    line-height: 1.5;
+  }
+  .cfg-preview-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #16a34a;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
 `;
 
 function Configuracion({ config, guardarConfig }) {
@@ -192,6 +248,7 @@ function Configuracion({ config, guardarConfig }) {
     direccionRestaurante: config.direccionRestaurante || '',
     whatsapp: config.whatsapp || '',
     tiempoEntrega: config.tiempoEntrega || '30-45',
+    mensajeWhatsapp: config.mensajeWhatsapp || 'Hola {nombre}! 🎉 Tu pedido #{numero} ya está {estado}. Total: ${total}. Tiempo estimado: {tiempo} min. ¡Gracias! 🍔',
     horarioApertura: config.horarioApertura || '08:00',
     horarioCierre: config.horarioCierre || '22:00',
     horarioActivo: config.horarioActivo !== false,
@@ -209,8 +266,6 @@ function Configuracion({ config, guardarConfig }) {
     guardarConfig(form);
     alert('Configuracion guardada con exito');
   };
-
-  const tiempos = ['15-25', '20-30', '30-45', '45-60', '60-90'];
 
   return (
     <div className="cfg-root">
@@ -253,23 +308,18 @@ function Configuracion({ config, guardarConfig }) {
       {/* Tiempo de entrega */}
       <div className="cfg-card">
         <div className="cfg-card-label">Tiempo estimado de entrega</div>
-        <div className="cfg-time-grid" style={{ marginTop: '8px' }}>
-          {tiempos.map((t) => (
-            <button
-              key={t}
-              className="cfg-time-btn"
-              onClick={() => setForm({ ...form, tiempoEntrega: t })}
-              style={{
-                border: form.tiempoEntrega === t ? `2px solid ${form.colorPrincipal}` : '1.5px solid #e8e8e8',
-                background: form.tiempoEntrega === t ? form.colorPrincipal + '15' : 'white',
-                color: form.tiempoEntrega === t ? form.colorPrincipal : '#555',
-                fontWeight: form.tiempoEntrega === t ? 600 : 400,
-              }}
-            >
-              {t} min
-            </button>
-          ))}
-        </div>
+        <div className="cfg-card-hint">Se muestra al cliente al confirmar el pedido</div>
+        <select
+          className="cfg-input"
+          value={form.tiempoEntrega}
+          onChange={(e) => setForm({ ...form, tiempoEntrega: e.target.value })}
+        >
+          <option value="15-25">15-25 minutos</option>
+          <option value="20-30">20-30 minutos</option>
+          <option value="30-45">30-45 minutos</option>
+          <option value="45-60">45-60 minutos</option>
+          <option value="60-90">60-90 minutos</option>
+        </select>
       </div>
 
       {/* Horario */}
@@ -341,6 +391,53 @@ function Configuracion({ config, guardarConfig }) {
         <div className="cfg-card-label">Dirección del restaurante</div>
         <div className="cfg-card-hint">Para centrar el mapa de estadísticas</div>
         <input className="cfg-input" placeholder="Ej: Calle 100 # 15-20, Bogotá" value={form.direccionRestaurante} onChange={(e) => setForm({ ...form, direccionRestaurante: e.target.value })} />
+      </div>
+
+      {/* Mensaje WhatsApp */}
+      <div className="cfg-card">
+        <div className="cfg-card-label">💬 Mensaje de notificación al cliente</div>
+        <div className="cfg-card-hint">
+          Este mensaje se envía por WhatsApp al notificar al cliente. Toca una variable para copiarla.
+        </div>
+        <textarea
+          className="cfg-textarea"
+          value={form.mensajeWhatsapp}
+          onChange={(e) => setForm({ ...form, mensajeWhatsapp: e.target.value })}
+          placeholder="Escribe el mensaje que recibirá el cliente..."
+        />
+        <div className="cfg-vars">
+          {[
+            { var: '{nombre}', desc: 'Nombre cliente' },
+            { var: '{numero}', desc: '# Pedido' },
+            { var: '{estado}', desc: 'Estado' },
+            { var: '{total}', desc: 'Total $' },
+            { var: '{tiempo}', desc: 'Tiempo entrega' },
+          ].map(v => (
+            <button
+              key={v.var}
+              className="cfg-var-chip"
+              title={v.desc}
+              onClick={() => {
+                const campo = document.querySelector('.cfg-textarea');
+                const start = campo?.selectionStart ?? form.mensajeWhatsapp.length;
+                const nuevo = form.mensajeWhatsapp.slice(0, start) + v.var + form.mensajeWhatsapp.slice(start);
+                setForm({ ...form, mensajeWhatsapp: nuevo });
+              }}
+            >
+              {v.var}
+            </button>
+          ))}
+        </div>
+        <div className="cfg-preview-box">
+          <div className="cfg-preview-label">Vista previa</div>
+          {form.mensajeWhatsapp
+            .replace('{nombre}', 'Juan')
+            .replace('{numero}', '3')
+            .replace('{estado}', 'en camino')
+            .replace('{total}', '45.000')
+            .replace('{tiempo}', form.tiempoEntrega)
+          }
+        </div>
       </div>
 
       <button className="cfg-save-btn" style={{ background: form.colorPrincipal }} onClick={handleGuardar}>
