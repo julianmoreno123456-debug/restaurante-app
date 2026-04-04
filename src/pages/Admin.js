@@ -624,7 +624,7 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
     }
   };
 
-  const COSTO_DOMICILIO = 2000;
+  const COSTO_DOMICILIO = config?.costoDomicilio ?? 2000;
   const totalManual = carritoManual.reduce((sum, p) => sum + p.precioFinal, 0);
   const totalManualConDomicilio = totalManual + (datosManual.tipoPedido === 'domicilio' ? COSTO_DOMICILIO : 0);
 
@@ -936,7 +936,7 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', color: '#888', marginBottom: '6px' }}>
                             <span>🛵 Domicilio</span>
-                            <span>$2.000</span>
+                            <span>${COSTO_DOMICILIO.toLocaleString()}</span>
                           </div>
                         </>
                       )}

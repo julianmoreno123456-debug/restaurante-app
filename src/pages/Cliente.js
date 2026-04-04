@@ -506,7 +506,9 @@ function Cliente({ platos = [], categorias = [], config = {}, uid, pedidosHabili
   };
 
   const eliminarDelCarrito = (index) => { setCarrito(carrito.filter((_, i) => i !== index)); };
+  const COSTO_DOMICILIO = config?.costoDomicilio ?? 2000;
   const total = carrito.reduce((sum, p) => sum + p.precioFinal, 0);
+  const totalConDomicilio = total + (datosPedido.tipoPedido === 'domicilio' ? COSTO_DOMICILIO : 0);
   const categoriasFiltradas = categorias.filter((c) => c.activa !== false);
   const platosFiltrados = categoriaActiva
     ? platos.filter((p) => p.categoriaId === categoriaActiva)
@@ -552,7 +554,7 @@ function Cliente({ platos = [], categorias = [], config = {}, uid, pedidosHabili
         lat: coords ? coords.lat : null,
         lng: coords ? coords.lng : null,
         items: carrito.map((p) => ({ nombre: p.nombre, precio: p.precioFinal, extra: p.extraElegido || null, opciones: p.opcionesElegidas || [] })),
-        total,
+        total: totalConDomicilio,
         numeroPedido,
         fecha: new Date().toISOString(),
         estado: 'pendiente',
@@ -583,8 +585,7 @@ function Cliente({ platos = [], categorias = [], config = {}, uid, pedidosHabili
         >
           🛒
           <span className="cl-cart-count">{carrito.length}</span>
-          {carrito.length > 0 && <span>— ${total.toLocaleString()}</span>}
-        </button>
+          {carrito.length > 0 && <span>— ${total.toLocaleString()}</span>}        </button>
 
         {/* PANEL CARRITO */}
         {carritoAbierto && (
@@ -606,7 +607,7 @@ function Cliente({ platos = [], categorias = [], config = {}, uid, pedidosHabili
             }
             {carrito.length > 0 && (
               <>
-                <div className="cl-cart-total">Total: ${total.toLocaleString()}</div>
+                <div className="cl-cart-total">Total: ${totalConDomicilio.toLocaleString()}</div>
                 <button
                   onClick={() => { setMostrarFormPedido(true); setCarritoAbierto(false); }}
                   className="cl-add-btn"
@@ -783,6 +784,22 @@ function Cliente({ platos = [], categorias = [], config = {}, uid, pedidosHabili
               )}
 
               <div className="cl-modal-actions">
+                {datosPedido.tipoPedido === 'domicilio' && (
+                  <div style={{ gridColumn: '1/-1', background: '#f7f7f5', borderRadius: '10px', padding: '12px 14px', marginBottom: '4px', fontSize: '13px', color: '#555' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <span>Subtotal productos</span>
+                      <span>${total.toLocaleString()}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <span>🛵 Domicilio</span>
+                      <span>${COSTO_DOMICILIO.toLocaleString()}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: '14px', color: '#111', borderTop: '1px solid #e8e8e8', paddingTop: '6px' }}>
+                      <span>Total</span>
+                      <span style={{ color }}>${totalConDomicilio.toLocaleString()}</span>
+                    </div>
+                  </div>
+                )}
                 <button className="cl-btn-confirm" style={{ background: color }} onClick={handleEnviarPedido}>
                   Confirmar →
                 </button>

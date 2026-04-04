@@ -252,6 +252,7 @@ function Configuracion({ config, guardarConfig }) {
     horarioApertura: config.horarioApertura || '08:00',
     horarioCierre: config.horarioCierre || '22:00',
     horarioActivo: config.horarioActivo !== false,
+    costoDomicilio: config.costoDomicilio ?? 2000,
   });
 
   const handleImagen = (campo, e) => {
@@ -322,6 +323,34 @@ function Configuracion({ config, guardarConfig }) {
         </select>
       </div>
 
+      {/* Costo de domicilio */}
+      <div className="cfg-card">
+        <div className="cfg-card-label">🛵 Costo del domicilio</div>
+        <div className="cfg-card-hint">Se suma automáticamente al total cuando el cliente elige domicilio</div>
+        <div style={{ position: 'relative' }}>
+          <span style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', fontSize: '14px', color: '#888', fontWeight: 500 }}>$</span>
+          <input
+            className="cfg-input"
+            type="number"
+            min="0"
+            step="500"
+            value={form.costoDomicilio}
+            onChange={(e) => setForm({ ...form, costoDomicilio: Number(e.target.value) })}
+            style={{ paddingLeft: '26px' }}
+          />
+        </div>
+        {form.costoDomicilio === 0 && (
+          <div style={{ marginTop: '8px', fontSize: '12px', color: '#f39c12', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            ⚠️ Domicilio gratis — el cliente no pagará recargo
+          </div>
+        )}
+        {form.costoDomicilio > 0 && (
+          <div style={{ marginTop: '8px', fontSize: '12px', color: '#27ae60', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            ✅ Se cobrarán ${Number(form.costoDomicilio).toLocaleString()} por domicilio
+          </div>
+        )}
+      </div>
+
       {/* Horario */}
       <div className="cfg-card">
         <div className="cfg-toggle-row">
@@ -354,8 +383,16 @@ function Configuracion({ config, guardarConfig }) {
               </div>
             </div>
             <div className="cfg-horario-info">
-              Abierto de {form.horarioApertura} a {form.horarioCierre}
+              🕐 Abierto de {form.horarioApertura} a {form.horarioCierre}
             </div>
+            <button
+              onClick={() => { guardarConfig({ ...form }); alert('✅ Horario aplicado'); }}
+              style={{ marginTop: '12px', width: '100%', padding: '11px', background: form.colorPrincipal, color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', fontFamily: 'Syne, sans-serif', fontSize: '14px', fontWeight: 600, transition: 'opacity 0.15s' }}
+              onMouseOver={e => e.target.style.opacity = '0.88'}
+              onMouseOut={e => e.target.style.opacity = '1'}
+            >
+              Aplicar horario
+            </button>
           </>
         )}
       </div>
