@@ -1014,11 +1014,11 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
                     {pedido.telefono && (
                       <a
                         href={`https://wa.me/${pedido.telefono.replace(/\D/g, '').startsWith('57') ? pedido.telefono.replace(/\D/g, '') : '57' + pedido.telefono.replace(/\D/g, '')}?text=${encodeURIComponent(
-                          (config?.mensajeWhatsapp || 'Hola {nombre}! 🎉 Tu pedido #{numero} ya está {estado}. Total: {total_pesos}. Tiempo estimado: {tiempo} min. ¡Gracias! 🍔')
+                          (config?.mensajeWhatsapp || 'Hola {nombre}! 🎉 Tu pedido #{numero} ya está {estado}. Total: ${total}. Tiempo estimado: {tiempo} min. ¡Gracias! 🍔')
                             .replace('{nombre}', pedido.nombre)
                             .replace('{numero}', pedido.numeroPedido)
                             .replace('{estado}', pedido.estado === 'preparando' ? 'en preparación' : pedido.estado === 'en camino' ? 'en camino, pronto llegará' : pedido.estado === 'entregado' ? 'entregado' : 'recibido')
-                            .replace('{total_pesos}', pedido.total.toLocaleString())
+                            .replace('{total}', pedido.total.toLocaleString())
                             .replace('{tiempo}', config?.tiempoEntrega || '30-45')
                         )}`}
                         target="_blank"
@@ -1140,6 +1140,27 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
                       <div className="plato-info">
                         <div className="plato-name">{plato.nombre}</div>
                         <div className="plato-price">${plato.precio.toLocaleString()}</div>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', marginRight: '4px' }}>
+                        <span style={{ fontSize: '10px', color: '#aaa', fontFamily: 'DM Sans, sans-serif', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Banner</span>
+                        <div
+                          onClick={() => plato.imagen && guardarPlato({ ...plato, enBanner: plato.enBanner === false ? true : false })}
+                          title={!plato.imagen ? 'Necesita foto para aparecer en el banner' : ''}
+                          style={{
+                            width: '44px', height: '24px', borderRadius: '12px',
+                            background: plato.enBanner !== false && plato.imagen ? color : '#ddd',
+                            position: 'relative', cursor: plato.imagen ? 'pointer' : 'not-allowed',
+                            transition: 'background 0.2s', flexShrink: 0,
+                          }}
+                        >
+                          <div style={{
+                            position: 'absolute', top: '3px',
+                            left: plato.enBanner !== false && plato.imagen ? '23px' : '3px',
+                            width: '18px', height: '18px', borderRadius: '50%',
+                            background: 'white', transition: 'left 0.2s',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                          }} />
+                        </div>
                       </div>
                       <button className="btn-icon" onClick={() => { setEditandoPlato({ ...plato }); setEditandoPlatoImagen(null); }} style={{ fontSize: '15px' }} title="Editar">✏️</button>
                       <button className="btn-icon" onClick={() => eliminarPlato(plato.id)} style={{ fontSize: '15px' }} title="Eliminar">🗑️</button>
