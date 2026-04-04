@@ -248,7 +248,7 @@ function Configuracion({ config, guardarConfig }) {
     direccionRestaurante: config.direccionRestaurante || '',
     whatsapp: config.whatsapp || '',
     tiempoEntrega: config.tiempoEntrega || '30-45',
-    mensajeWhatsapp: config.mensajeWhatsapp || 'Hola {nombre}! 🎉 Tu pedido #{numero} ya está {estado}. Total: \${total}. Tiempo estimado: {tiempo} min. ¡Gracias! 🍔',
+    mensajeWhatsapp: config.mensajeWhatsapp || 'Hola {nombre}! 🎉 Tu pedido #{numero} ya está {estado}. Total: {total_pesos}. Tiempo estimado: {tiempo} min. ¡Gracias! 🍔',
     horarioApertura: config.horarioApertura || '08:00',
     horarioCierre: config.horarioCierre || '22:00',
     horarioActivo: config.horarioActivo !== false,
