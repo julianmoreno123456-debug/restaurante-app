@@ -17,7 +17,7 @@ const clienteStyles = `
     min-height: 100vh;
     display: flex;
     flex-direction: column;
-    align-items: center; 
+    align-items: center;
     justify-content: center;
     animation: splashIn 0.4s ease both;
   }
@@ -276,7 +276,8 @@ const clienteStyles = `
   .cl-plato-img { width: 100%; height: 120px; object-fit: cover; }
   .cl-plato-placeholder { width: 100%; height: 120px; background: #f5f5f3; display: flex; align-items: center; justify-content: center; font-size: 36px; }
   .cl-plato-body { padding: 12px; }
-  .cl-plato-name { font-weight: 500; font-size: 14px; color: #111; margin-bottom: 3px; line-height: 1.3; }
+  .cl-plato-name { font-weight: 500; font-size: 14px; color: #111; margin-bottom: 2px; line-height: 1.3; }
+  .cl-plato-desc { font-size: 11.5px; color: #999; margin-bottom: 6px; line-height: 1.4; }
   .cl-plato-price { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
 
   .cl-extra-select {
@@ -443,7 +444,7 @@ function Cliente({ platos = [], categorias = [], config = {}, uid, pedidosHabili
   };
 
   const restauranteAbierto = estaAbierto();
-  const imagenesPlatos = platos.filter((p) => p.imagen).map((p) => ({ imagen: p.imagen, nombre: p.nombre }));
+  const imagenesPlatos = platos.filter((p) => p.imagen && p.enBanner !== false).map((p) => ({ imagen: p.imagen, nombre: p.nombre }));
   const imagenesCarrusel = config?.banner
     ? [{ imagen: config.banner, nombre: config.nombre }, ...imagenesPlatos]
     : imagenesPlatos;
@@ -708,6 +709,9 @@ function Cliente({ platos = [], categorias = [], config = {}, uid, pedidosHabili
                 }
                 <div className="cl-plato-body">
                   <div className="cl-plato-name">{plato.nombre}</div>
+                  {plato.descripcion && (
+                    <div className="cl-plato-desc">{plato.descripcion}</div>
+                  )}
                   <div className="cl-plato-price" style={{ color }}>${plato.precio.toLocaleString()}</div>
 
                   {plato.extras.length > 0 && (

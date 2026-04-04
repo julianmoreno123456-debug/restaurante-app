@@ -497,7 +497,7 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
   const [editandoPlato, setEditandoPlato] = useState(null); // plato completo
   const [editandoPlatoImagen, setEditandoPlatoImagen] = useState(null);
   const [platoSeleccionado, setPlatoSeleccionado] = useState(null);
-  const [nuevoPlato, setNuevoPlato] = useState({ nombre: '', precio: '', imagen: null, extras: [], opciones: [] });
+  const [nuevoPlato, setNuevoPlato] = useState({ nombre: '', descripcion: '', precio: '', imagen: null, extras: [], opciones: [] });
   const [nuevoExtra, setNuevoExtra] = useState({ nombre: '', precio: 0, gratis: false });
   const [nuevaOpcion, setNuevaOpcion] = useState('');
 
@@ -570,6 +570,7 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
       id: Date.now() + Math.random().toString(36).substr(2, 9),
       categoriaId: categoriaActiva,
       nombre: nuevoPlato.nombre,
+      descripcion: nuevoPlato.descripcion || '',
       precio: Number(nuevoPlato.precio),
       imagen: nuevoPlato.imagen || null,
       extras: [],
@@ -577,7 +578,7 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
       emoji: '🍔',
     };
     guardarPlato(plato);
-    setNuevoPlato({ nombre: '', precio: '', imagen: null, extras: [], opciones: [] });
+    setNuevoPlato({ nombre: '', descripcion: '', precio: '', imagen: null, extras: [], opciones: [] });
     setMostrarFormPlato(false);
   };
 
@@ -1065,6 +1066,13 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
                   <input className="form-input" placeholder="Nombre del plato" value={nuevoPlato.nombre} onChange={(e) => setNuevoPlato({ ...nuevoPlato, nombre: e.target.value })} />
                   <input className="form-input" type="number" placeholder="Precio" value={nuevoPlato.precio} onChange={(e) => setNuevoPlato({ ...nuevoPlato, precio: e.target.value })} style={{ maxWidth: '140px' }} />
                 </div>
+                <input
+                  className="form-input"
+                  placeholder="Descripción corta (opcional) — Ej: Con papas fritas y salsa especial"
+                  value={nuevoPlato.descripcion}
+                  onChange={(e) => setNuevoPlato({ ...nuevoPlato, descripcion: e.target.value })}
+                  style={{ marginBottom: '12px' }}
+                />
                 <span className="file-label">Foto del plato</span>
                 <input type="file" accept="image/*" onChange={handleImagen} style={{ marginBottom: '12px', fontSize: '13px', width: '100%' }} />
                 {nuevoPlato.imagen && <img src={nuevoPlato.imagen} alt="preview" style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '10px', marginBottom: '12px' }} />}
@@ -1096,6 +1104,14 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
                         onChange={(e) => setEditandoPlato({ ...editandoPlato, nombre: e.target.value })}
                         style={{ marginBottom: '12px' }}
                         autoFocus
+                      />
+                      <label style={{ fontSize: '12px', color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '6px' }}>Descripción</label>
+                      <input
+                        className="form-input"
+                        placeholder="Ej: Con papas fritas y salsa especial"
+                        value={editandoPlato.descripcion || ''}
+                        onChange={(e) => setEditandoPlato({ ...editandoPlato, descripcion: e.target.value })}
+                        style={{ marginBottom: '12px' }}
                       />
                       <label style={{ fontSize: '12px', color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '6px' }}>Precio</label>
                       <input
@@ -1139,6 +1155,9 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
                       }
                       <div className="plato-info">
                         <div className="plato-name">{plato.nombre}</div>
+                        {plato.descripcion && (
+                          <div style={{ fontSize: '12px', color: '#888', marginBottom: '3px', lineHeight: 1.4 }}>{plato.descripcion}</div>
+                        )}
                         <div className="plato-price">${plato.precio.toLocaleString()}</div>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', marginRight: '4px' }}>
