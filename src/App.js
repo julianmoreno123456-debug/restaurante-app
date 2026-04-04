@@ -17,6 +17,26 @@ const configInicial = {
   logo: null,
 };
 
+// Cambia título y favicon dinámicamente
+function setPageMeta(nombre, logo) {
+  document.title = nombre || 'Lovecraft';
+
+  let link = document.querySelector("link[rel~='icon']");
+  if (!link) {
+    link = document.createElement('link');
+    link.rel = 'icon';
+    document.head.appendChild(link);
+  }
+
+  if (logo) {
+    link.href = logo;
+    link.type = 'image/png';
+  } else {
+    link.href = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍽️</text></svg>";
+    link.type = 'image/svg+xml';
+  }
+}
+
 function AdminWrapper() {
   const [usuario, setUsuario] = useState(null);
   const [cargando, setCargando] = useState(true);
@@ -24,7 +44,7 @@ function AdminWrapper() {
   const [categorias, setCategorias] = useState([]);
   const [pedidos, setPedidos] = useState([]);
   const [config, setConfig] = useState(configInicial);
-  const [restauranteInfo, setRestauranteInfo] = useState(null); // ✅ NUEVO
+  const [restauranteInfo, setRestauranteInfo] = useState(null);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
@@ -54,11 +74,8 @@ function AdminWrapper() {
       if (!snap.empty) setConfig({ id: snap.docs[0].id, ...snap.docs[0].data() });
     });
 
-    // ✅ NUEVO LISTENER DEL RESTAURANTE
     const unsubInfo = onSnapshot(doc(db, 'restaurantes', uid), (snap) => {
-      if (snap.exists()) {
-        setRestauranteInfo(snap.data());
-      }
+      if (snap.exists()) setRestauranteInfo(snap.data());
     });
 
     return () => {
@@ -66,9 +83,15 @@ function AdminWrapper() {
       unsubPlat();
       unsubPed();
       unsubConfig();
-      unsubInfo(); // ✅ limpieza
+      unsubInfo();
     };
   }, [usuario]);
+
+  useEffect(() => {
+    if (config?.nombre && config.nombre !== 'Mi Restaurante') {
+      setPageMeta('Admin — ' + config.nombre, config.logo);
+    }
+  }, [config]);
 
   const uid = usuario?.uid;
 
@@ -78,6 +101,7 @@ function AdminWrapper() {
 
   const eliminarCategoria = async (id) => {
     await deleteDoc(doc(db, `restaurantes/${uid}/categorias`, String(id)));
+    platos.filter((p) => p.categoriaId === id).forEach((p) => eliminarPlato(p.id));
   };
 
   const guardarPlato = async (plato) => {
@@ -102,8 +126,8 @@ function AdminWrapper() {
       categorias={categorias}
       pedidos={pedidos}
       config={config}
-      uid={uid} // ✅ agregado
-      pedidosHabilitados={restauranteInfo?.pedidosHabilitados !== false} // ✅ agregado
+      uid={uid}
+      pedidosHabilitados={restauranteInfo?.pedidosHabilitados !== false}
       guardarCategoria={guardarCategoria}
       eliminarCategoria={eliminarCategoria}
       guardarPlato={guardarPlato}
@@ -130,12 +154,7 @@ function ClienteWrapperRoute() {
 
         if (snap.empty) {
           const directSnap = await getDocs(query(collection(db, 'restaurantes'), where('uid', '==', slug)));
-
-          if (directSnap.empty) {
-            setEstado('noexiste');
-            return;
-          }
-
+          if (directSnap.empty) { setEstado('noexiste'); return; }
           const data = directSnap.docs[0].data();
           setRestauranteInfo(data);
           setUid(data.uid);
@@ -148,7 +167,6 @@ function ClienteWrapperRoute() {
         setEstado('noexiste');
       }
     };
-
     buscar();
   }, [slug]);
 
@@ -169,13 +187,8 @@ function ClienteWrapperRoute() {
     });
 
     const unsubInfo = onSnapshot(doc(db, 'restaurantes', uid), (snap) => {
-      if (!snap.exists()) {
-        setEstado('noexiste');
-        return;
-      }
-
+      if (!snap.exists()) { setEstado('noexiste'); return; }
       setRestauranteInfo(snap.data());
-
       if (snap.data().suspendido) setEstado('suspendido');
       else setEstado('listo');
     });
@@ -188,10 +201,14 @@ function ClienteWrapperRoute() {
     };
   }, [uid]);
 
+  useEffect(() => {
+    if (config?.nombre && config.nombre !== 'Mi Restaurante') {
+      setPageMeta(config.nombre, config.logo);
+    }
+  }, [config]);
+
   if (estado === 'cargando') return <div style={{ textAlign: 'center', marginTop: '100px' }}>Cargando...</div>;
-
   if (estado === 'noexiste') return <div style={{ textAlign: 'center', marginTop: '100px' }}>No existe</div>;
-
   if (estado === 'suspendido') return <div style={{ textAlign: 'center', marginTop: '100px' }}>Suspendido</div>;
 
   return (
@@ -205,12 +222,19 @@ function ClienteWrapperRoute() {
   );
 }
 
+function SuperAdminWrapper() {
+  useEffect(() => {
+    setPageMeta('Panel Maestro — Lovecraft', null);
+  }, []);
+  return <SuperAdmin />;
+}
+
 function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<div style={{ textAlign: 'center', marginTop: '100px' }}><h1>Bienvenido a Lovecraft</h1></div>} />
-        <Route path="/superadmin" element={<SuperAdmin />} />
+        <Route path="/superadmin" element={<SuperAdminWrapper />} />
         <Route path="/admin" element={<AdminWrapper />} />
         <Route path="/restaurante/:slug" element={<ClienteWrapperRoute />} />
       </Routes>
