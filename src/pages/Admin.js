@@ -1014,7 +1014,7 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
                     {pedido.telefono && (
                       <a
                         href={`https://wa.me/${pedido.telefono.replace(/\D/g, '').startsWith('57') ? pedido.telefono.replace(/\D/g, '') : '57' + pedido.telefono.replace(/\D/g, '')}?text=${encodeURIComponent(
-                          (config?.mensajeWhatsapp || 'Hola {nombre}! 🎉 Tu pedido #{numero} ya está {estado}. Total: ${total}. Tiempo estimado: {tiempo} min. ¡Gracias! 🍔')
+                          (config?.mensajeWhatsapp || 'Hola {nombre}! 🎉 Tu pedido #{numero} ya está {estado}. Total: \${total}. Tiempo estimado: {tiempo} min. ¡Gracias! 🍔')
                             .replace('{nombre}', pedido.nombre)
                             .replace('{numero}', pedido.numeroPedido)
                             .replace('{estado}', pedido.estado === 'preparando' ? 'en preparación' : pedido.estado === 'en camino' ? 'en camino, pronto llegará' : pedido.estado === 'entregado' ? 'entregado' : 'recibido')
