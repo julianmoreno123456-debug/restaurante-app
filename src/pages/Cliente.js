@@ -17,7 +17,7 @@ const clienteStyles = `
     min-height: 100vh;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: center; 
     justify-content: center;
     animation: splashIn 0.4s ease both;
   }
@@ -443,7 +443,7 @@ function Cliente({ platos = [], categorias = [], config = {}, uid, pedidosHabili
   };
 
   const restauranteAbierto = estaAbierto();
-  const imagenesPlatos = platos.filter((p) => p.imagen && p.enBanner !== false).map((p) => ({ imagen: p.imagen, nombre: p.nombre }));
+  const imagenesPlatos = platos.filter((p) => p.imagen).map((p) => ({ imagen: p.imagen, nombre: p.nombre }));
   const imagenesCarrusel = config?.banner
     ? [{ imagen: config.banner, nombre: config.nombre }, ...imagenesPlatos]
     : imagenesPlatos;
