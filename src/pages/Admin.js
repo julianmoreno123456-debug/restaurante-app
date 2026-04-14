@@ -608,6 +608,196 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
     await updateDoc(doc(db, `restaurantes/${uid}/pedidos`, pedidoId), { estado: nuevoEstado });
   };
 
+  const generarFactura = (pedido) => {
+    const nombreRestaurante = config?.nombre || 'Mi Restaurante';
+    const descripcionRestaurante = config?.descripcion || '';
+    const logo = config?.logo || null;
+    const fecha = new Date(pedido.fecha);
+    const fechaStr = fecha.toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' });
+    const horaStr = fecha.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+    const esDomicilio = pedido.tipoPedido === 'domicilio';
+    const subtotal = esDomicilio ? pedido.total - (config?.costoDomicilio ?? 2000) : pedido.total;
+    const domicilio = esDomicilio ? (config?.costoDomicilio ?? 2000) : 0;
+
+    const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Factura #${pedido.numeroPedido} — ${nombreRestaurante}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Courier New', Courier, monospace;
+      background: #f5f5f5;
+      display: flex;
+      justify-content: center;
+      padding: 20px;
+    }
+    .ticket {
+      background: white;
+      width: 320px;
+      padding: 24px 20px;
+      border-radius: 4px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+    }
+    .header { text-align: center; margin-bottom: 16px; }
+    .logo {
+      width: 70px; height: 70px;
+      border-radius: 50%; object-fit: cover;
+      margin-bottom: 10px;
+      border: 2px solid #eee;
+    }
+    .rest-nombre {
+      font-family: sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      color: #111;
+      margin-bottom: 3px;
+    }
+    .rest-desc { font-size: 11px; color: #888; margin-bottom: 4px; }
+    .divider {
+      border: none;
+      border-top: 1px dashed #ccc;
+      margin: 12px 0;
+    }
+    .factura-num {
+      text-align: center;
+      font-size: 13px;
+      font-weight: 700;
+      color: #111;
+      margin-bottom: 4px;
+    }
+    .fecha { text-align: center; font-size: 11px; color: #888; margin-bottom: 2px; }
+    .section-title {
+      font-size: 10px;
+      font-weight: 700;
+      color: #aaa;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin: 10px 0 6px;
+    }
+    .cliente-row { font-size: 12px; color: #444; margin-bottom: 3px; }
+    .cliente-row span { font-weight: 600; color: #111; }
+    .item-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #333;
+      padding: 4px 0;
+      border-bottom: 1px dotted #eee;
+    }
+    .item-row:last-child { border-bottom: none; }
+    .item-name { flex: 1; padding-right: 8px; line-height: 1.4; }
+    .item-price { flex-shrink: 0; font-weight: 600; }
+    .subtotal-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #666;
+      padding: 3px 0;
+    }
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 15px;
+      font-weight: 700;
+      color: #111;
+      padding: 8px 0 4px;
+      border-top: 2px solid #111;
+      margin-top: 4px;
+    }
+    .estado-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+    .footer {
+      text-align: center;
+      font-size: 11px;
+      color: #aaa;
+      margin-top: 16px;
+      line-height: 1.5;
+    }
+    @media print {
+      body { background: white; padding: 0; }
+      .ticket { box-shadow: none; border-radius: 0; width: 100%; max-width: 320px; margin: 0 auto; }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="ticket">
+    <div class="header">
+      ${logo ? `<img src="${logo}" class="logo" alt="logo"/>` : '<div style="font-size:40px;margin-bottom:10px">🍽️</div>'}
+      <div class="rest-nombre">${nombreRestaurante}</div>
+      ${descripcionRestaurante ? `<div class="rest-desc">${descripcionRestaurante}</div>` : ''}
+    </div>
+
+    <hr class="divider"/>
+
+    <div class="factura-num">FACTURA #${pedido.numeroPedido}</div>
+    <div class="fecha">${fechaStr}</div>
+    <div class="fecha">${horaStr}</div>
+
+    <hr class="divider"/>
+
+    <div class="section-title">Cliente</div>
+    <div class="cliente-row"><span>${pedido.nombre}</span></div>
+    <div class="cliente-row">📞 ${pedido.telefono}</div>
+    <div class="cliente-row">${esDomicilio ? '🛵 ' : '🪑 '}${pedido.direccion}</div>
+
+    <hr class="divider"/>
+
+    <div class="section-title">Productos</div>
+    ${pedido.items.map(item => `
+      <div class="item-row">
+        <div class="item-name">
+          ${item.nombre}
+          ${item.extra ? `<br/><small style="color:#999">+ ${item.extra}</small>` : ''}
+          ${item.opciones && item.opciones.length > 0 ? `<br/><small style="color:#999">${item.opciones.join(', ')}</small>` : ''}
+        </div>
+        <div class="item-price">$${item.precio.toLocaleString()}</div>
+      </div>
+    `).join('')}
+
+    <hr class="divider"/>
+
+    ${esDomicilio ? `
+      <div class="subtotal-row"><span>Subtotal</span><span>$${subtotal.toLocaleString()}</span></div>
+      <div class="subtotal-row"><span>🛵 Domicilio</span><span>$${domicilio.toLocaleString()}</span></div>
+    ` : ''}
+    <div class="total-row"><span>TOTAL</span><span>$${pedido.total.toLocaleString()}</span></div>
+
+    <div style="text-align:center; margin-top:10px;">
+      <span class="estado-badge" style="background:${pedido.estado === 'entregado' ? '#e8f8f0' : '#fff8e1'}; color:${pedido.estado === 'entregado' ? '#1a7a4a' : '#b8860b'}">
+        ${pedido.estado === 'pendiente' ? '⏳ Pendiente' : pedido.estado === 'preparando' ? '👨‍🍳 En preparación' : pedido.estado === 'en camino' ? '🛵 En camino' : '✅ Entregado'}
+      </span>
+    </div>
+
+    <hr class="divider"/>
+    <div class="footer">
+      ¡Gracias por tu pedido!<br/>
+      ${nombreRestaurante}
+    </div>
+
+    <div class="no-print" style="text-align:center; margin-top:20px;">
+      <button onclick="window.print()" style="padding:10px 28px; background:#111; color:white; border:none; border-radius:8px; font-size:14px; cursor:pointer; font-family:sans-serif; font-weight:600;">
+        🖨️ Imprimir
+      </button>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    const ventana = window.open('', '_blank', 'width=420,height=700');
+    ventana.document.write(html);
+    ventana.document.close();
+  };
+
   const agregarAlCarritoManual = (plato) => {
     const extraElegido = extrasElegidosManual[plato.id] || null;
     const precioExtra = extraElegido ? plato.extras.find((e) => e.nombre === extraElegido)?.precio || 0 : 0;
@@ -1012,23 +1202,34 @@ function Admin({ platos, categorias, guardarCategoria, eliminarCategoria, guarda
 
                     <p className="pedido-fecha">{new Date(pedido.fecha).toLocaleString()}</p>
 
-                    {pedido.telefono && (
-                      <a
-                        href={`https://wa.me/${pedido.telefono.replace(/\D/g, '').startsWith('57') ? pedido.telefono.replace(/\D/g, '') : '57' + pedido.telefono.replace(/\D/g, '')}?text=${encodeURIComponent(
-                          (config?.mensajeWhatsapp || 'Hola {nombre}! 🎉 Tu pedido #{numero} ya está {estado}. Total: {total}. Tiempo estimado: {tiempo} min. ¡Gracias! 🍔')
-                            .replace('{nombre}', pedido.nombre)
-                            .replace('{numero}', pedido.numeroPedido)
-                            .replace('{estado}', pedido.estado === 'preparando' ? 'en preparación' : pedido.estado === 'en camino' ? 'en camino, pronto llegará' : pedido.estado === 'entregado' ? 'entregado' : 'recibido')
-                            .replace('{total}', '$' + pedido.total.toLocaleString())
-                            .replace('{tiempo}', config?.tiempoEntrega || '30-45')
-                        )}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="btn-whatsapp"
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
+                      <button
+                        onClick={() => generarFactura(pedido)}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 14px', background: '#f5f5f3', border: '1px solid #e0e0dd', borderRadius: '10px', cursor: 'pointer', fontSize: '12.5px', fontWeight: 500, fontFamily: 'DM Sans, sans-serif', color: '#333', transition: 'background 0.15s' }}
+                        onMouseOver={e => e.currentTarget.style.background = '#e8e8e5'}
+                        onMouseOut={e => e.currentTarget.style.background = '#f5f5f3'}
                       >
-                        💬 Notificar al cliente
-                      </a>
-                    )}
+                        🧾 Generar factura
+                      </button>
+
+                      {pedido.telefono && (
+                        <a
+                          href={`https://wa.me/${pedido.telefono.replace(/\D/g, '').startsWith('57') ? pedido.telefono.replace(/\D/g, '') : '57' + pedido.telefono.replace(/\D/g, '')}?text=${encodeURIComponent(
+                            (config?.mensajeWhatsapp || 'Hola {nombre}! 🎉 Tu pedido #{numero} ya está {estado}. Total: {total}. Tiempo estimado: {tiempo} min. ¡Gracias! 🍔')
+                              .replace('{nombre}', pedido.nombre)
+                              .replace('{numero}', pedido.numeroPedido)
+                              .replace('{estado}', pedido.estado === 'preparando' ? 'en preparación' : pedido.estado === 'en camino' ? 'en camino, pronto llegará' : pedido.estado === 'entregado' ? 'entregado' : 'recibido')
+                              .replace('{total}', '$' + pedido.total.toLocaleString())
+                              .replace('{tiempo}', config?.tiempoEntrega || '30-45')
+                          )}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn-whatsapp"
+                        >
+                          💬 Notificar al cliente
+                        </a>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
